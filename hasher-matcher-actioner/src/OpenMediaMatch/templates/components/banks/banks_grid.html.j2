@@ -49,42 +49,110 @@
         const addContentModal = document.getElementById("add-content-modal-" + bankTitle);
         const addContentToBankForm = document.getElementById("add_content_to_bank_" + bankTitle);
         const formContent = addContentToBankForm.innerHTML;
-        addContentToBankForm.addEventListener("submit", (event) => {
-            event.preventDefault();
-            const formData = new FormData(event.target);
-            formData.append(event.target.content_type.value, event.target.file.files[0]);
-            formData.delete("file");
-
-            fetch(`/c/bank/${bankTitle}/content`, {
-                method: 'POST',
-                body: formData
-            })
-                .then(response => response.json())
-                .then(data => {
-                    // Handle the response from the server here
-                    renderAddBankResult(data);
-
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                });
-        })
-
-        // add file type listener
+        
+        // Get toggle elements for this specific bank
+        const fileSection = document.getElementById("add_file_section_" + bankTitle);
+        const hashSection = document.getElementById("add_hash_section_" + bankTitle);
+        const inputFileRadio = document.getElementById("add_input_file_" + bankTitle);
+        const inputHashRadio = document.getElementById("add_input_hash_" + bankTitle);
+        const fileInput = document.getElementById("bank-add-file-input-" + bankTitle);
+        const hashInput = document.getElementById("bank-add-hash-input-" + bankTitle);
+        
+        // Set up toggle event listeners once when page loads
+        function toggleInputMode() {
+            if (inputFileRadio && inputFileRadio.checked) {
+                // Show file section, hide hash section
+                if (fileSection) fileSection.classList.remove('d-none');
+                if (hashSection) hashSection.classList.add('d-none');
+                if (fileInput) fileInput.required = true;
+                if (hashInput) hashInput.required = false;
+            } else if (inputHashRadio && inputHashRadio.checked) {
+                // Show hash section, hide file section
+                if (fileSection) fileSection.classList.add('d-none');
+                if (hashSection) hashSection.classList.remove('d-none');
+                if (fileInput) fileInput.required = false;
+                if (hashInput) hashInput.required = true;
+            }
+        }
+        
+        // Add event listeners for radio buttons
+        if (inputFileRadio) {
+            inputFileRadio.addEventListener("change", toggleInputMode);
+        }
+        
+        if (inputHashRadio) {
+            inputHashRadio.addEventListener("change", toggleInputMode);
+        }
+        
+        // Reset to file mode when modal is shown
         addContentModal.addEventListener('shown.bs.modal', function () {
-            const fileInput = document.getElementById('bank-add-file-input-' + bankTitle);
-            document.addEventListener('change', (e) => {
-                if (e.target.id === 'bank-add-content-type-' + bankTitle) {
-                    // Special case selections for our well known types
-                    if (e.target.value === 'photo') {
-                        fileInput.accept = "image/*";
-                    } else if (e.target.value === 'video') {
-                        fileInput.accept = "video/*";
-                    } else {
-                        fileInput.accept = "file";
-                    }
+            if (inputFileRadio) inputFileRadio.checked = true;
+            toggleInputMode();
+        });
+        
+        // Add file type listener for file upload mode
+        const contentTypeSelect = document.getElementById('bank-add-content-type-' + bankTitle);
+        if (contentTypeSelect) {
+            contentTypeSelect.addEventListener('change', (e) => {
+                // Special case selections for our well known types
+                if (e.target.value === 'photo') {
+                    fileInput.accept = "image/*";
+                } else if (e.target.value === 'video') {
+                    fileInput.accept = "video/*";
+                } else {
+                    fileInput.accept = "file";
                 }
             });
+        }
+        
+        addContentToBankForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            
+            const inputType = document.querySelector(`input[name="add_input_type_${bankTitle}"]:checked`).value;
+            
+            if (inputType === "file") {
+                // File upload mode
+                const formData = new FormData(event.target);
+                formData.append(event.target.content_type.value, event.target.file.files[0]);
+                formData.delete("file");
+
+                fetch(`/c/bank/${bankTitle}/content`, {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        renderAddBankResult(data);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+            } else {
+                // Hash input mode
+                const hash = event.target.hash.value;
+                const signal_type = event.target.signal_type.value;
+                
+                const params = new URLSearchParams({
+                    hash: hash,
+                    signal_type: signal_type,
+                    bank_name: bankTitle
+                });
+
+                fetch('/ui/add_hash_to_bank', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: params
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        renderAddBankResult(data);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+            }
         });
 
         // reset modal innerHTML on close

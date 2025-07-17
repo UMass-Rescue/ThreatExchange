@@ -2,16 +2,54 @@
 <div class="card">
     <div class="card-header">Find Content in Banks</div>
     <form id="match_file" class="card-body">
-        <div class="row">
+        <!-- Toggle between file upload and hash input -->
+        <div class="row mb-3">
             <div class="col">
-                <input class="form-control" type="file" name="file" required />
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="input_type" id="input_file" value="file" checked>
+                    <label class="form-check-label" for="input_file">Upload File</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="input_type" id="input_hash" value="hash">
+                    <label class="form-check-label" for="input_hash">Enter Hash</label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- File upload section -->
+        <div class="row" id="file_section">
+            <div class="col">
+                <input class="form-control" type="file" name="file" id="file_input" />
             </div>
             <div class="col">
-                <select class="form-select" name="media" id="content-type" required>
+                <select class="form-select" name="media" id="content-type">
                     <option selected disabled value="">Select content type</option>
                     {% for c in content %}
                         {% if c['enabled'] %}
                             <option value="{{c['name']}}">{{c['name'].capitalize()}}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col">
+                <button type="submit" class="btn btn-primary">Find</button>
+            </div>
+            <div class="col">
+                <!-- for spacing -->
+            </div>
+        </div>
+        
+        <!-- Hash input section -->
+        <div class="row" id="hash_section" style="display: none;">
+            <div class="col">
+                <input class="form-control" type="text" name="hash" id="hash_input" placeholder="Enter hash value" />
+            </div>
+            <div class="col">
+                <select class="form-select" name="signal_type" id="signal-type">
+                    <option selected disabled value="">Select signal type</option>
+                    {% for s in signal %}
+                        {% if s['enabled'] %}
+                            <option value="{{s['name']}}">{{s['name'].upper()}}</option>
                         {% endif %}
                     {% endfor %}
                 </select>
@@ -32,28 +70,84 @@
 <script>
     const match_form = document.getElementById("match_file");
     const matches = document.getElementById("matches");
+    const file_section = document.getElementById("file_section");
+    const hash_section = document.getElementById("hash_section");
+    const input_file_radio = document.getElementById("input_file");
+    const input_hash_radio = document.getElementById("input_hash");
+    const file_input = document.getElementById("file_input");
+    const hash_input = document.getElementById("hash_input");
+    
     let banks = [];
+    
+    // Toggle between file and hash input sections
+    input_file_radio.addEventListener("change", function() {
+        if (this.checked) {
+            file_section.style.display = "flex";
+            hash_section.style.display = "none";
+            file_input.required = true;
+            hash_input.required = false;
+        }
+    });
+    
+    input_hash_radio.addEventListener("change", function() {
+        if (this.checked) {
+            file_section.style.display = "none";
+            hash_section.style.display = "flex";
+            file_input.required = false;
+            hash_input.required = true;
+        }
+    });
+    
     match_form.addEventListener("submit", (event) => {
         event.preventDefault();
-        const formData = new FormData();
+        
+        const input_type = document.querySelector('input[name="input_type"]:checked').value;
+        
+        if (input_type === "file") {
+            // File upload mode
+            const formData = new FormData();
+            formData.append(event.target.media.value, event.target.file.files[0]);
 
-        // Append the selected file and content type to the FormData
-        formData.append(event.target.media.value, event.target.file.files[0]);
-
-        fetch('/ui/query', {
-            method: 'POST',
-            body: formData
-        })
-            .then(response => response.json())
-            .then(data => {
-                // Handle the response from the server here
-                banks = data.banks;
-                renderMatchResult(data);
-                highlightMatchedResults(data);
+            fetch('/ui/query', {
+                method: 'POST',
+                body: formData
             })
-            .catch(error => {
-                console.error('Error:', error);
+                .then(response => response.json())
+                .then(data => {
+                    banks = data.banks;
+                    renderMatchResult(data);
+                    highlightMatchedResults(data);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        } else {
+            // Hash input mode
+            const hash = event.target.hash.value;
+            const signal_type = event.target.signal_type.value;
+            
+            const params = new URLSearchParams({
+                hash: hash,
+                signal_type: signal_type
             });
+
+            fetch('/ui/query_hash', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: params
+            })
+                .then(response => response.json())
+                .then(data => {
+                    banks = data.banks;
+                    renderMatchResult(data);
+                    highlightMatchedResults(data);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }
     })
 
     

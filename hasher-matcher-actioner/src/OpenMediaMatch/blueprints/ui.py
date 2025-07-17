@@ -132,6 +132,7 @@ def banks():
     template_vars = {
         "bankList": curation.banks_index(),
         "content": curation.get_all_content_types(),
+        "signal": curation.get_all_signal_types(),  # Add signal types for hash input dropdown
     }
     return render_template("bootstrap.html.j2", page="banks", **template_vars)
 
@@ -179,3 +180,97 @@ def upload():
     }
 
     return {"hashes": signals, "banks": sorted(banks)}
+
+
+@bp.route("/query_hash", methods=["POST"])
+def query_hash():
+    """
+    Look up a hash directly in the similarity index.
+    
+    Input:
+     * hash - the hash value
+     * signal_type - the signal type name
+     
+    Output:
+     * JSON object with banks that match and the hash value
+    """
+    current_app.logger.debug("[query_hash] processing direct hash input")
+    
+    hash_value = request.form.get("hash")
+    signal_type = request.form.get("signal_type")
+    
+    if not hash_value or not signal_type:
+        abort(400, "Both hash and signal_type are required")
+    
+    current_app.logger.debug("[query_hash] performing lookup for %s hash: %s", signal_type, hash_value)
+    banks = list(matching.lookup(hash_value, signal_type).keys())
+    
+    # Return the same format as the file upload endpoint
+    return {"hashes": {signal_type: hash_value}, "banks": sorted(banks)}
+
+
+@bp.route("/add_hash_to_bank", methods=["POST"])
+def add_hash_to_bank():
+    """
+    Add a hash directly to a bank.
+    
+    Input:
+     * hash - the hash value
+     * signal_type - the signal type name
+     * bank_name - the bank to add the hash to
+     
+    Output:
+     * JSON object with the content ID and signals added
+    """
+    current_app.logger.debug("[add_hash_to_bank] processing direct hash addition to bank")
+    
+    hash_value = request.form.get("hash")
+    signal_type = request.form.get("signal_type")
+    bank_name = request.form.get("bank_name")
+    
+    if not hash_value or not signal_type or not bank_name:
+        abort(400, "hash, signal_type, and bank_name are all required")
+    
+    # Validate the bank exists
+    storage = get_storage()
+    bank = storage.get_bank(bank_name)
+    if not bank:
+        abort(404, f"bank '{bank_name}' not found")
+    
+    # At this point bank is guaranteed to be not None
+    
+    # Validate the signal type exists and is enabled
+    signal_type_cfgs = storage.get_signal_type_configs()
+    st_cfg = signal_type_cfgs.get(signal_type)
+    if st_cfg is None:
+        abort(400, f"No such signal type {signal_type}")
+    if st_cfg.enabled_ratio <= 0:
+        abort(400, f"Signal type {signal_type} is disabled")
+    
+    # Validate the hash format
+    try:
+        validated_hash = st_cfg.signal_type.validate_signal_str(hash_value)
+    except Exception as e:
+        abort(400, f"Invalid {signal_type} hash: {str(e)}")
+    
+    current_app.logger.debug("[add_hash_to_bank] adding %s hash to bank %s: %s", signal_type, bank_name, hash_value)
+    
+    # Use the existing bank_add_content method to add the hash
+    from OpenMediaMatch.storage import interface as iface
+    
+    signals = {st_cfg.signal_type: validated_hash}
+    content_config = iface.BankContentConfig(
+        id=0,
+        disable_until_ts=iface.BankContentConfig.ENABLED,
+        collab_metadata={},
+        original_media_uri=None,
+        bank=bank,  # type: ignore  # bank is guaranteed to be not None due to check above
+    )
+    
+    content_id = storage.bank_add_content(bank_name, signals, content_config)
+    
+    # Return the same format as the file upload endpoint
+    return {
+        "id": content_id,
+        "signals": {st_cfg.signal_type.get_name(): validated_hash},
+    }

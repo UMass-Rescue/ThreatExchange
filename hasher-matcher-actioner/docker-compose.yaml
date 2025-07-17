@@ -1,5 +1,3 @@
-version: "3"
-
 x-postgres-variables: &postgres-variables
   POSTGRES_USER: media_match
   # TODO: Use a secret instead.
@@ -12,7 +10,7 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - 5000:5000
+      - 5005:5000
     environment:
       <<: *postgres-variables
       OMM_CONFIG: /build/reference_omm_configs/development_omm_config.py

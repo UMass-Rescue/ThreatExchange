@@ -11,10 +11,24 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="row">
+                    <!-- Toggle between file upload and hash input -->
+                    <div class="row mb-3">
                         <div class="col">
-                            <select id="bank-add-content-type-{{ bank_title }}" class="form-select" name="content_type"
-                                required>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="add_input_type_{{ bank_title }}" id="add_input_file_{{ bank_title }}" value="file" checked>
+                                <label class="form-check-label" for="add_input_file_{{ bank_title }}">Upload File</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="add_input_type_{{ bank_title }}" id="add_input_hash_{{ bank_title }}" value="hash">
+                                <label class="form-check-label" for="add_input_hash_{{ bank_title }}">Enter Hash</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- File upload section -->
+                    <div class="row" id="add_file_section_{{ bank_title }}">
+                        <div class="col">
+                            <select id="bank-add-content-type-{{ bank_title }}" class="form-select" name="content_type">
                                 <option selected disabled value="">Select content type</option>
                                 {% for c in content %}
                                 {% if c['enabled'] %}
@@ -25,7 +39,24 @@
                         </div>
                         <div class="col">
                             <input id="bank-add-file-input-{{ bank_title }}" class="form-control" type="file"
-                                name="file" required>
+                                name="file">
+                        </div>
+                    </div>
+                    
+                    <!-- Hash input section -->
+                    <div class="row d-none" id="add_hash_section_{{ bank_title }}">
+                        <div class="col">
+                            <input class="form-control" type="text" name="hash" id="bank-add-hash-input-{{ bank_title }}" placeholder="Enter hash value" />
+                        </div>
+                        <div class="col">
+                            <select class="form-select" name="signal_type" id="bank-add-signal-type-{{ bank_title }}">
+                                <option selected disabled value="">Select signal type</option>
+                                {% for s in signal %}
+                                    {% if s['enabled_ratio'] > 0 %}
+                                        <option value="{{s['name']}}">{{s['name'].upper()}}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
                 </div>
