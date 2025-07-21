@@ -173,13 +173,19 @@ def upload():
     signals = hashing.hash_media_from_form_data()
 
     current_app.logger.debug("[query] performing lookup")
-    banks = {
-        b
-        for st_name, signal in signals.items()
-        for b in matching.lookup(signal, st_name)
-    }
+    bank_matches = {}
+    for st_name, signal in signals.items():
+        matches = matching.lookup(signal, st_name)
+        for bank_name, bank_results in matches.items():
+            min_distance = min(int(match["distance"]) for match in bank_results)
+            if bank_name not in bank_matches or min_distance < bank_matches[bank_name]["distance"]:
+                bank_matches[bank_name] = {"distance": min_distance}
 
-    return {"hashes": signals, "banks": sorted(banks)}
+    return {
+        "hashes": signals, 
+        "banks": sorted(bank_matches.keys()),
+        "bank_matches": bank_matches
+    }
 
 
 @bp.route("/query_hash", methods=["POST"])
@@ -192,7 +198,7 @@ def query_hash():
      * signal_type - the signal type name
      
     Output:
-     * JSON object with banks that match and the hash value
+     * JSON object with banks that match, the hash value, and distance information
     """
     current_app.logger.debug("[query_hash] processing direct hash input")
     
@@ -203,10 +209,19 @@ def query_hash():
         abort(400, "Both hash and signal_type are required")
     
     current_app.logger.debug("[query_hash] performing lookup for %s hash: %s", signal_type, hash_value)
-    banks = list(matching.lookup(hash_value, signal_type).keys())
+    matches = matching.lookup(hash_value, signal_type)
+    
+    bank_matches = {}
+    for bank_name, bank_results in matches.items():
+        min_distance = min(int(match["distance"]) for match in bank_results)
+        bank_matches[bank_name] = {"distance": min_distance}
     
     # Return the same format as the file upload endpoint
-    return {"hashes": {signal_type: hash_value}, "banks": sorted(banks)}
+    return {
+        "hashes": {signal_type: hash_value}, 
+        "banks": sorted(matches.keys()),
+        "bank_matches": bank_matches
+    }
 
 
 @bp.route("/add_hash_to_bank", methods=["POST"])

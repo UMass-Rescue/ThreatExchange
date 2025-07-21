@@ -159,8 +159,21 @@
     }
     
     const renderMatchResult = (result) => {
-        // Render matched banks
-        const banksList = result.banks.map(bank => `<li>${bank}</li>`).join('');
+        // Render matched banks with distances
+        let banksList = '';
+        if (result.bank_matches && Object.keys(result.bank_matches).length > 0) {
+            banksList = Object.entries(result.bank_matches)
+                .map(([bankName, matchInfo]) => 
+                    `<li><strong>${bankName}</strong> (distance: ${matchInfo.distance})</li>`
+                )
+                .join('');
+        } else if (result.banks && result.banks.length > 0) {
+            // Fallback for backward compatibility
+            banksList = result.banks.map(bank => `<li>${bank}</li>`).join('');
+        } else {
+            banksList = '<li><em>No matches found</em></li>';
+        }
+        
         const content = `
                 <div class="card-body">
                     <h5>Matched Banks</h5>
