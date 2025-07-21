@@ -50,44 +50,53 @@
         const addContentToBankForm = document.getElementById("add_content_to_bank_" + bankTitle);
         const formContent = addContentToBankForm.innerHTML;
         
-        // Get toggle elements for this specific bank
-        const fileSection = document.getElementById("add_file_section_" + bankTitle);
-        const hashSection = document.getElementById("add_hash_section_" + bankTitle);
-        const inputFileRadio = document.getElementById("add_input_file_" + bankTitle);
-        const inputHashRadio = document.getElementById("add_input_hash_" + bankTitle);
-        const fileInput = document.getElementById("bank-add-file-input-" + bankTitle);
-        const hashInput = document.getElementById("bank-add-hash-input-" + bankTitle);
-        
-        // Set up toggle event listeners once when page loads
-        function toggleInputMode() {
-            if (inputFileRadio && inputFileRadio.checked) {
-                // Show file section, hide hash section
-                if (fileSection) fileSection.classList.remove('d-none');
-                if (hashSection) hashSection.classList.add('d-none');
-                if (fileInput) fileInput.required = true;
-                if (hashInput) hashInput.required = false;
-            } else if (inputHashRadio && inputHashRadio.checked) {
-                // Show hash section, hide file section
-                if (fileSection) fileSection.classList.add('d-none');
-                if (hashSection) hashSection.classList.remove('d-none');
-                if (fileInput) fileInput.required = false;
-                if (hashInput) hashInput.required = true;
+        // Function to setup event listeners and toggle functionality
+        function setupEventListeners() {
+            // Get toggle elements for this specific bank
+            const fileSection = document.getElementById("add_file_section_" + bankTitle);
+            const hashSection = document.getElementById("add_hash_section_" + bankTitle);
+            const inputFileRadio = document.getElementById("add_input_file_" + bankTitle);
+            const inputHashRadio = document.getElementById("add_input_hash_" + bankTitle);
+            const fileInput = document.getElementById("bank-add-file-input-" + bankTitle);
+            const hashInput = document.getElementById("bank-add-hash-input-" + bankTitle);
+            
+            // Set up toggle event listeners
+            function toggleInputMode() {
+                if (inputFileRadio && inputFileRadio.checked) {
+                    // Show file section, hide hash section
+                    if (fileSection) fileSection.classList.remove('d-none');
+                    if (hashSection) hashSection.classList.add('d-none');
+                    if (fileInput) fileInput.required = true;
+                    if (hashInput) hashInput.required = false;
+                } else if (inputHashRadio && inputHashRadio.checked) {
+                    // Show hash section, hide file section
+                    if (fileSection) fileSection.classList.add('d-none');
+                    if (hashSection) hashSection.classList.remove('d-none');
+                    if (fileInput) fileInput.required = false;
+                    if (hashInput) hashInput.required = true;
+                }
             }
-        }
-        
-        // Add event listeners for radio buttons
-        if (inputFileRadio) {
-            inputFileRadio.addEventListener("change", toggleInputMode);
-        }
-        
-        if (inputHashRadio) {
-            inputHashRadio.addEventListener("change", toggleInputMode);
-        }
-        
-        // Reset to file mode when modal is shown
-        addContentModal.addEventListener('shown.bs.modal', function () {
+            
+            // Add event listeners for radio buttons
+            if (inputFileRadio) {
+                inputFileRadio.addEventListener("change", toggleInputMode);
+            }
+            
+            if (inputHashRadio) {
+                inputHashRadio.addEventListener("change", toggleInputMode);
+            }
+            
+            // Set default state to file mode
             if (inputFileRadio) inputFileRadio.checked = true;
             toggleInputMode();
+        }
+        
+        // Set up initial event listeners
+        setupEventListeners();
+        
+        // Reset to file mode and re-setup event listeners when modal is shown
+        addContentModal.addEventListener('shown.bs.modal', function () {
+            setupEventListeners();
         });
         
         // Add file type listener for file upload mode
@@ -155,9 +164,10 @@
             }
         });
 
-        // reset modal innerHTML on close
+        // reset modal innerHTML on close and re-setup event listeners
         addContentModal.addEventListener('hidden.bs.modal', function () {
             addContentToBankForm.innerHTML = formContent;
+            setupEventListeners();
         });
 
         const renderAddBankResult = (result) => {
