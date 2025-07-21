@@ -177,7 +177,7 @@ def upload():
     for st_name, signal in signals.items():
         matches = matching.lookup(signal, st_name)
         for bank_name, bank_results in matches.items():
-            min_distance = min(int(match["distance"]) for match in bank_results)
+            min_distance = min(float(match["distance"]) for match in bank_results)
             if bank_name not in bank_matches or min_distance < bank_matches[bank_name]["distance"]:
                 bank_matches[bank_name] = {"distance": min_distance}
 
@@ -213,7 +213,7 @@ def query_hash():
     
     bank_matches = {}
     for bank_name, bank_results in matches.items():
-        min_distance = min(int(match["distance"]) for match in bank_results)
+        min_distance = min(float(match["distance"]) for match in bank_results)
         bank_matches[bank_name] = {"distance": min_distance}
     
     # Return the same format as the file upload endpoint
