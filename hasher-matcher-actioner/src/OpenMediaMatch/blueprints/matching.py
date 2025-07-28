@@ -429,6 +429,7 @@ def compare():
             comparison = signal_type.compare_hash(left, right)
             current_app.logger.info(f"Comparison: {comparison}")
             results[signal_type_str] = _convert_to_json_serializable(comparison)
+            current_app.logger.info("Conversion done")
         except Exception as e:
             abort(400, f"Invalid {signal_type_str} hash: {e}")
     return results
