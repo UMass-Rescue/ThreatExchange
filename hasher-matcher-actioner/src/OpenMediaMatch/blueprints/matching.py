@@ -10,6 +10,7 @@ import datetime
 import random
 import typing as t
 import time
+import numpy as np
 
 from flask import Blueprint, Flask, abort, current_app, request
 from flask_apscheduler import APScheduler
@@ -372,6 +373,17 @@ def index_status():
         status_by_name[name] = status
     return status_by_name
 
+def _convert_to_json_serializable(obj):
+    if isinstance(obj, dict):
+        return {k: _convert_to_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_to_json_serializable(v) for v in obj]
+    elif isinstance(obj, (np.bool_, np.bool)):
+        return bool(obj)
+    elif isinstance(obj, (np.float32, np.float64)):
+        return float(obj)
+    else:
+        return obj
 
 @bp.route("/compare", methods=["POST"])
 def compare():
@@ -416,7 +428,7 @@ def compare():
             right = signal_type.validate_signal_str(hashes_to_compare[1])
             comparison = signal_type.compare_hash(left, right)
             current_app.logger.info(f"Comparison: {comparison}")
-            results[signal_type_str] = comparison
+            results[signal_type_str] = _convert_to_json_serializable(comparison)
         except Exception as e:
             abort(400, f"Invalid {signal_type_str} hash: {e}")
     return results
