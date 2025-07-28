@@ -398,6 +398,7 @@ def compare():
         }
     }
     """
+    current_app.logger.info(f"Comparing hashes: {request.get_json()}")
     request_data = request.get_json()
     if type(request_data) != dict:
         abort(400, "Request input was not a dict")
@@ -414,6 +415,7 @@ def compare():
             left = signal_type.validate_signal_str(hashes_to_compare[0])
             right = signal_type.validate_signal_str(hashes_to_compare[1])
             comparison = signal_type.compare_hash(left, right)
+            current_app.logger.info(f"Comparison: {comparison}")
             results[signal_type_str] = comparison
         except Exception as e:
             abort(400, f"Invalid {signal_type_str} hash: {e}")
