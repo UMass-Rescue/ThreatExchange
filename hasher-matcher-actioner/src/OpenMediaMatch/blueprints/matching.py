@@ -12,7 +12,6 @@ import typing as t
 import time
 import numpy as np
 
-from dataclasses import asdict, is_dataclass
 from flask import Blueprint, Flask, abort, current_app, request
 from flask_apscheduler import APScheduler
 from werkzeug.exceptions import HTTPException
@@ -374,19 +373,13 @@ def index_status():
         status_by_name[name] = status
     return status_by_name
 
-def convert_to_json_serializable(obj):
-    if is_dataclass(obj):
-        obj = asdict(obj)
-    if isinstance(obj, dict):
-        return {k: convert_to_json_serializable(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_to_json_serializable(v) for v in obj]
-    elif isinstance(obj, (np.bool_, np.bool)):
-        return bool(obj)
-    elif isinstance(obj, (np.float32, np.float64)):
-        return float(obj)
-    else:
-        return obj
+def jsonify_comparison(comp):
+    return {
+        "match": bool(comp.match),
+        "distance": {
+            "distance": float(comp.distance.distance)
+        }
+    }
 
 @bp.route("/compare", methods=["POST"])
 def compare():
@@ -431,7 +424,7 @@ def compare():
             right = signal_type.validate_signal_str(hashes_to_compare[1])
             comparison = signal_type.compare_hash(left, right)
             current_app.logger.info(f"Comparison: {comparison}")
-            results[signal_type_str] = convert_to_json_serializable(comparison)
+            results[signal_type_str] = jsonify_comparison(comparison)
             current_app.logger.info(f"JSONized: {results[signal_type_str]}")
         except Exception as e:
             abort(400, f"Invalid {signal_type_str} hash: {e}")
