@@ -287,6 +287,149 @@ def lookup_post() -> TBankMatchBySignalType:
     return resp
 
 
+@bp.route("/threshold_lookup", methods=["GET"])
+def threshold_lookup() -> t.Union[TMatchByBank, TBankMatchBySignalType]:
+    """
+    Look up a hash in the similarity index with a specific threshold.
+    The hash can either be specified via `signal_type` and `signal` query params,
+    or a file url can be provided in the `url` query param.
+    
+    Input:
+     Either:
+     * File URL (`url`)
+     * Optional content type (`content_type`)
+     Or:
+     * Signal type (hash type)
+     * Signal value (the hash)
+
+     Also (applies to both cases):
+     * threshold (float) - distance threshold for matches
+     * Optional seed (content id) for consistent coinflip
+    Output:
+     * JSON object keyed by signal type, to a JSON object of bank
+       matches with distance <= threshold. If Signal Type is given, the outer JSON object is
+       elided.
+
+    Example output:
+    {
+        "pdq": {
+            "BANK_A": [
+                {"bank_content_id": 1001, "distance": 4},
+                {"bank_content_id": 1002, "distance": 0},
+            ],
+            "BANK_B": [
+                {"bank_content_id": 4434, "distance": 0},
+            ]
+        },
+    }
+    """
+    threshold = request.args.get("threshold")
+    if threshold is None:
+        abort(400, "threshold parameter is required")
+    
+    try:
+        threshold_float = float(threshold)
+    except ValueError:
+        abort(400, "threshold must be a valid float")
+    
+    resp: dict[str, TMatchByBank] = {}
+    if request.args.get("url", None):
+        if not current_app.config.get("ROLE_HASHER", False):
+            abort(403, "Hashing is disabled, missing role")
+
+        hashes = hashing.hash_media()
+
+        for signal_type in hashes.keys():
+            signal = hashes[signal_type]
+            resp[signal_type] = query_threshold_index(signal, signal_type, threshold_float)
+    else:
+        signal = require_request_param("signal")
+        signal_type = require_request_param("signal_type")
+        return query_threshold_index(signal, signal_type, threshold_float)
+
+    selected_st = request.args.get("signal_type")
+    if selected_st is not None:
+        return resp[selected_st]
+    return resp
+
+
+@bp.route("/topk_lookup", methods=["GET"])
+def topk_lookup() -> t.Union[TMatchByBank, TBankMatchBySignalType]:
+    """
+    Look up a hash in the similarity index for top k matches.
+    The hash can either be specified via `signal_type` and `signal` query params,
+    or a file url can be provided in the `url` query param.
+    
+    Input:
+     Either:
+     * File URL (`url`)
+     * Optional content type (`content_type`)
+     Or:
+     * Signal type (hash type)
+     * Signal value (the hash)
+
+     Also (applies to both cases):
+     * k (int) - number of top matches to return
+     * Optional max_threshold (float) - maximum distance threshold to consider
+     * Optional seed (content id) for consistent coinflip
+    Output:
+     * JSON object keyed by signal type, to a JSON object of bank
+       matches with top k closest matches. If Signal Type is given, the outer JSON object is
+       elided.
+
+    Example output:
+    {
+        "pdq": {
+            "BANK_A": [
+                {"bank_content_id": 1001, "distance": 4},
+                {"bank_content_id": 1002, "distance": 0},
+            ],
+            "BANK_B": [
+                {"bank_content_id": 4434, "distance": 0},
+            ]
+        },
+    }
+    """
+    k_param = request.args.get("k")
+    if k_param is None:
+        abort(400, "k parameter is required")
+    
+    try:
+        k = int(k_param)
+        if k <= 0:
+            abort(400, "k must be a positive integer")
+    except ValueError:
+        abort(400, "k must be a valid integer")
+    
+    max_threshold = request.args.get("max_threshold")
+    max_threshold_float = None
+    if max_threshold is not None:
+        try:
+            max_threshold_float = float(max_threshold)
+        except ValueError:
+            abort(400, "max_threshold must be a valid float")
+    
+    resp: dict[str, TMatchByBank] = {}
+    if request.args.get("url", None):
+        if not current_app.config.get("ROLE_HASHER", False):
+            abort(403, "Hashing is disabled, missing role")
+
+        hashes = hashing.hash_media()
+
+        for signal_type in hashes.keys():
+            signal = hashes[signal_type]
+            resp[signal_type] = query_topk_index(signal, signal_type, k, max_threshold_float)
+    else:
+        signal = require_request_param("signal")
+        signal_type = require_request_param("signal_type")
+        return query_topk_index(signal, signal_type, k, max_threshold_float)
+
+    selected_st = request.args.get("signal_type")
+    if selected_st is not None:
+        return resp[selected_st]
+    return resp
+
+
 def lookup(signal: str, signal_type_name: str) -> TMatchByBank:
     current_app.logger.debug("performing lookup")
     results_by_bank_content_id = {
@@ -315,6 +458,104 @@ def lookup(signal: str, signal_type_name: str) -> TMatchByBank:
         if content.bank.name not in enabled_banks:
             continue
 
+        matched_content = results_by_bank_content_id[content.id]
+        match: MatchWithDistance = {
+            "bank_content_id": content.id,
+            "distance": matched_content.similarity_info.pretty_str(),
+        }
+        results[content.bank.name].append(match)
+    return results
+
+
+def query_threshold_index(signal: str, signal_type_name: str, threshold: float) -> TMatchByBank:
+    """
+    Look up a hash in the similarity index with a specific threshold.
+    Returns matches with distance <= threshold, organized by bank.
+    Currently only CLIP signals support threshold lookup.
+    """
+    current_app.logger.debug("performing threshold lookup with threshold %f", threshold)
+    
+    # Check if this is a CLIP signal type (which supports query_threshold via tx-extension-clip)
+    if signal_type_name.lower() != "clip":
+        abort(400, f"threshold_lookup not available for signal type '{signal_type_name}'. Currently only CLIP signals support threshold lookup.")
+    
+    # Get the index and validate signal
+    storage = get_storage()
+    signal_type = _validate_and_transform_signal_type(signal_type_name, storage)
+    try:
+        signal = signal_type.validate_signal_str(signal)
+    except Exception as e:
+        abort(400, f"invalid signal: {e}")
+    
+    index = _get_index(signal_type)
+    if index is None:
+        abort(503, "index not yet ready")
+    
+    current_app.logger.debug("[lookup_signal] querying index with threshold %f", threshold)
+    try:
+        index_results = index.query_threshold_index(signal, threshold)
+    except AttributeError:
+        abort(400, f"threshold_lookup not available for signal type '{signal_type_name}'.")
+    current_app.logger.debug("[lookup_signal] threshold query complete, found %d matches", len(index_results))
+    
+    # Process results for bank content
+    results_by_bank_content_id = {r.metadata: r for r in index_results}
+    contents = storage.bank_content_get(results_by_bank_content_id)
+    enabled_content = [c for c in contents if c.enabled]
+    
+    # Organize by bank
+    results = defaultdict(list)
+    for content in enabled_content:
+        matched_content = results_by_bank_content_id[content.id]
+        match: MatchWithDistance = {
+            "bank_content_id": content.id,
+            "distance": matched_content.similarity_info.pretty_str(),
+        }
+        results[content.bank.name].append(match)
+    return results
+
+
+def query_topk_index(signal: str, signal_type_name: str, k: int, max_threshold: t.Optional[float] = None) -> TMatchByBank:
+    """
+    Look up a hash in the similarity index for top k matches.
+    Returns the k closest matches, optionally filtered by max_threshold, organized by bank.
+    Currently only CLIP signals support topk lookup.
+    """
+    current_app.logger.debug("performing topk lookup for top %d matches", k)
+    if max_threshold is not None:
+        current_app.logger.debug("with max threshold %f", max_threshold)
+    
+    # Check if this is a CLIP signal type (which supports query_topk via tx-extension-clip)
+    if signal_type_name.lower() != "clip":
+        abort(400, f"topk_lookup not available for signal type '{signal_type_name}'. Currently only CLIP signals support topk lookup.")
+    
+    # Get the index and validate signal
+    storage = get_storage()
+    signal_type = _validate_and_transform_signal_type(signal_type_name, storage)
+    try:
+        signal = signal_type.validate_signal_str(signal)
+    except Exception as e:
+        abort(400, f"invalid signal: {e}")
+    
+    index = _get_index(signal_type)
+    if index is None:
+        abort(503, "index not yet ready")
+    
+    current_app.logger.debug("[lookup_signal] querying index for top %d matches", k)
+    try:
+        index_results = index.query_topk_index(signal, k, max_threshold)
+    except AttributeError:
+        abort(400, f"topk_lookup not available for signal type '{signal_type_name}'.")
+    current_app.logger.debug("[lookup_signal] topk query complete, found %d matches", len(index_results))
+    
+    # Process results for bank content
+    results_by_bank_content_id = {r.metadata: r for r in index_results}
+    contents = storage.bank_content_get(results_by_bank_content_id)
+    enabled_content = [c for c in contents if c.enabled]
+    
+    # Organize by bank
+    results = defaultdict(list)
+    for content in enabled_content:
         matched_content = results_by_bank_content_id[content.id]
         match: MatchWithDistance = {
             "bank_content_id": content.id,
