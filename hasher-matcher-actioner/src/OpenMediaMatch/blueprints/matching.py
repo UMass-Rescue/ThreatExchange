@@ -493,7 +493,7 @@ def query_threshold_index(signal: str, signal_type_name: str, threshold: float) 
     
     current_app.logger.debug("[lookup_signal] querying index with threshold %f", threshold)
     try:
-        index_results = index.query_threshold_index(signal, threshold)
+        index_results = index.query_threshold(signal, threshold)
     except AttributeError:
         abort(400, f"threshold_lookup not available for signal type '{signal_type_name}'.")
     current_app.logger.debug("[lookup_signal] threshold query complete, found %d matches", len(index_results))
@@ -543,7 +543,7 @@ def query_topk_index(signal: str, signal_type_name: str, k: int, max_threshold: 
     
     current_app.logger.debug("[lookup_signal] querying index for top %d matches", k)
     try:
-        index_results = index.query_topk_index(signal, k, max_threshold)
+        index_results = index.query_topk(signal, k, max_threshold)
     except AttributeError:
         abort(400, f"topk_lookup not available for signal type '{signal_type_name}'.")
     current_app.logger.debug("[lookup_signal] topk query complete, found %d matches", len(index_results))
