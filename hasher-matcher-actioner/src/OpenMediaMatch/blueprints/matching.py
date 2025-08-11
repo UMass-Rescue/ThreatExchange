@@ -370,7 +370,6 @@ def topk_lookup() -> t.Union[TMatchByBank, TBankMatchBySignalType]:
 
      Also (applies to both cases):
      * k (int) - number of top matches to return
-     * Optional max_threshold (float) - maximum distance threshold to consider
      * Optional seed (content id) for consistent coinflip
     Output:
      * JSON object keyed by signal type, to a JSON object of bank
@@ -401,14 +400,6 @@ def topk_lookup() -> t.Union[TMatchByBank, TBankMatchBySignalType]:
     except ValueError:
         abort(400, "k must be a valid integer")
     
-    max_threshold = request.args.get("max_threshold")
-    max_threshold_float = None
-    if max_threshold is not None:
-        try:
-            max_threshold_float = float(max_threshold)
-        except ValueError:
-            abort(400, "max_threshold must be a valid float")
-    
     resp: dict[str, TMatchByBank] = {}
     if request.args.get("url", None):
         if not current_app.config.get("ROLE_HASHER", False):
@@ -418,11 +409,11 @@ def topk_lookup() -> t.Union[TMatchByBank, TBankMatchBySignalType]:
 
         for signal_type in hashes.keys():
             signal = hashes[signal_type]
-            resp[signal_type] = query_topk_index(signal, signal_type, k, max_threshold_float)
+            resp[signal_type] = query_topk_index(signal, signal_type, k)
     else:
         signal = require_request_param("signal")
         signal_type = require_request_param("signal_type")
-        return query_topk_index(signal, signal_type, k, max_threshold_float)
+        return query_topk_index(signal, signal_type, k)
 
     selected_st = request.args.get("signal_type")
     if selected_st is not None:
@@ -515,15 +506,13 @@ def query_threshold_index(signal: str, signal_type_name: str, threshold: float) 
     return results
 
 
-def query_topk_index(signal: str, signal_type_name: str, k: int, max_threshold: t.Optional[float] = None) -> TMatchByBank:
+def query_topk_index(signal: str, signal_type_name: str, k: int) -> TMatchByBank:
     """
     Look up a hash in the similarity index for top k matches.
-    Returns the k closest matches, optionally filtered by max_threshold, organized by bank.
+    Returns the k closest matches, organized by bank.
     Currently only CLIP signals support topk lookup.
     """
     current_app.logger.debug("performing topk lookup for top %d matches", k)
-    if max_threshold is not None:
-        current_app.logger.debug("with max threshold %f", max_threshold)
     
     # Check if this is a CLIP signal type (which supports query_topk via tx-extension-clip)
     if signal_type_name.lower() != "clip":
@@ -543,7 +532,7 @@ def query_topk_index(signal: str, signal_type_name: str, k: int, max_threshold: 
     
     current_app.logger.debug("[lookup_signal] querying index for top %d matches", k)
     try:
-        index_results = index.query_topk(signal, k, max_threshold)
+        index_results = index.query_topk(signal, k)
     except AttributeError:
         abort(400, f"topk_lookup not available for signal type '{signal_type_name}'.")
     current_app.logger.debug("[lookup_signal] topk query complete, found %d matches", len(index_results))
