@@ -43,12 +43,14 @@ bp.register_error_handler(HTTPException, api_error_handler)
 class MatchWithDistance(t.TypedDict):
     bank_content_id: int
     distance: str
+    collab_metadata: t.NotRequired[t.Mapping[str, t.Sequence[str]]]
 
 
 class MatchWithDistanceAndSignal(t.TypedDict):
     bank_content_id: int
     distance: str
     signal: str
+    collab_metadata: t.NotRequired[t.Mapping[str, t.Sequence[str]]]
 
 
 TMatchByBank = t.Mapping[str, t.Sequence[MatchWithDistance]]
@@ -174,14 +176,18 @@ def lookup_threshold():
 
     results = query_index_threshold(signal, signal_type_name, threshold)
     storage = get_storage()
-    # Get signals for the results
+    # Get signals and content metadata for the results
     content_ids = [m.metadata for m in results]
     signals_by_content = storage.bank_content_get_signals(content_ids)
+    contents = storage.bank_content_get(content_ids)
+    content_by_id = {c.id: c for c in contents}
+    
     matches = [
         {
             "bank_content_id": m.metadata,
             "distance": m.similarity_info.pretty_str(),
             "signal": signals_by_content.get(m.metadata, {}).get(signal_type_name, ""),
+            "collab_metadata": content_by_id.get(m.metadata, type('obj', (object,), {'collab_metadata': {}})).collab_metadata,
         }
         for m in results
     ]
@@ -208,14 +214,18 @@ def lookup_topk():
 
     results = query_index_topk(signal, signal_type_name, k)
     storage = get_storage()
-    # Get signals for the results
+    # Get signals and content metadata for the results
     content_ids = [m.metadata for m in results]
     signals_by_content = storage.bank_content_get_signals(content_ids)
+    contents = storage.bank_content_get(content_ids)
+    content_by_id = {c.id: c for c in contents}
+    
     matches = [
         {
             "bank_content_id": m.metadata,
             "distance": m.similarity_info.pretty_str(),
             "signal": signals_by_content.get(m.metadata, {}).get(signal_type_name, ""),
+            "collab_metadata": content_by_id.get(m.metadata, type('obj', (object,), {'collab_metadata': {}})).collab_metadata,
         }
         for m in results
     ]
@@ -298,10 +308,16 @@ def lookup_signal_with_distance(
     signal: str, signal_type_name: str
 ) -> list[MatchWithDistance]:
     results = query_index(signal, signal_type_name)
+    storage = get_storage()
+    content_ids = [m.metadata for m in results]
+    contents = storage.bank_content_get(content_ids)
+    content_by_id = {c.id: c for c in contents}
+    
     return [
         {
             "bank_content_id": m.metadata,
             "distance": m.similarity_info.pretty_str(),
+            "collab_metadata": content_by_id.get(m.metadata, type('obj', (object,), {'collab_metadata': {}})).collab_metadata,
         }
         for m in results
     ]
@@ -453,6 +469,7 @@ def lookup(
         match: MatchWithDistance = {
             "bank_content_id": content.id,
             "distance": matched_content.similarity_info.pretty_str(),
+            "collab_metadata": content.collab_metadata,
         }
         results[content.bank.name].append(match)
     return results
