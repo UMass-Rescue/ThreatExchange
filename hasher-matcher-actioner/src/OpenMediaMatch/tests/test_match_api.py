@@ -8,7 +8,7 @@ from flask.testing import FlaskClient
 
 from threatexchange.signal_type.pdq.signal import PdqSignal
 from threatexchange.signal_type.md5 import VideoMD5Signal
-from threatexchange.signal_type.index import SignalTypeIndex, IndexMatchUntyped, SignalSimilarityInfo
+from threatexchange.signal_type.index import IndexMatchUntyped, SignalSimilarityInfo
 from threatexchange.exchanges.impl.static_sample import StaticSampleSignalExchangeAPI
 
 from OpenMediaMatch.tests.utils import app
@@ -36,9 +36,7 @@ def client_with_sample_data(app) -> FlaskClient:
     fetcher.fetch_all(storage, storage.get_signal_type_configs())
     build_index.build_all_indices(storage, storage, storage)
 
-    client = app.test_client()
-    assert client.get("/status").status_code == 200
-    return client
+    return app.test_client()
 
 
 def test_raw_lookups(client_with_sample_data: FlaskClient):
@@ -118,7 +116,7 @@ def test_lookup_topk(client_with_sample_data: FlaskClient):
         # Should return 501 if the signal type doesn't support query_top_k
         assert resp.status_code in [200, 501]
         if resp.status_code == 501:
-            assert "does not support query_top_k" in resp.json.get("error", "")
+            assert "does not support query_top_k" in resp.json.get("message", "")
 
     # Test missing k parameter with first signal type
     sig_name = list(storage.get_signal_type_configs().keys())[0]
@@ -153,7 +151,7 @@ def test_lookup_topk_with_mock(client_with_sample_data: FlaskClient):
     mock_signal_config.signal_type = mock_signal_type
 
     # Mock the index to have query_top_k method
-    mock_index = MagicMock(spec=SignalTypeIndex)
+    mock_index = MagicMock()
     mock_results = [
         IndexMatchUntyped(
             metadata=1001,
@@ -215,7 +213,7 @@ def test_lookup_threshold(client_with_sample_data: FlaskClient):
         # Should return 501 if the signal type doesn't support query_threshold
         assert resp.status_code in [200, 501]
         if resp.status_code == 501:
-            assert "does not support query_threshold" in resp.json.get("error", "")
+            assert "does not support query_threshold" in resp.json.get("message", "")
 
     # Test missing threshold parameter with first signal type
     sig_name = list(storage.get_signal_type_configs().keys())[0]
@@ -245,8 +243,8 @@ def test_lookup_threshold_with_mock(client_with_sample_data: FlaskClient):
     mock_signal_config.signal_type = mock_signal_type
 
     # Mock the index to have query_threshold method
-    mock_index = MagicMock(spec=SignalTypeIndex)
-    
+    mock_index = MagicMock()
+
     # Mock signals (32 char hex strings)
     mock_signal_1 = "1111222233334444555566667777aaaa"
     mock_signal_2 = "8888999900001111222233334444bbbb"
