@@ -116,17 +116,18 @@ def test_lookup_topk(client_with_sample_data: FlaskClient):
         # Should return 501 if the signal type doesn't support query_top_k
         assert resp.status_code in [200, 501]
         if resp.status_code == 501:
+            assert resp.json is not None
             assert "does not support query_top_k" in resp.json.get("message", "")
 
     # Test missing k parameter with first signal type
     sig_name = list(storage.get_signal_type_configs().keys())[0]
     signal_cfg = storage.get_signal_type_configs()[sig_name]
     sig_str = signal_cfg.signal_type.get_examples()[0]
-    
+
     query_str = {"signal": sig_str, "signal_type": sig_name}
     resp = client.get("/m/lookup_topk", query_string=query_str)
     assert resp.status_code == 400
-    
+
     # Test invalid k parameter
     query_str = {"signal": sig_str, "signal_type": sig_name, "k": "invalid"}
     resp = client.get("/m/lookup_topk", query_string=query_str)
@@ -138,11 +139,11 @@ def test_lookup_topk_with_mock(client_with_sample_data: FlaskClient):
     client = client_with_sample_data
 
     storage = get_storage()
-    
+
     # Use a mock external signal type not in ThreatExchange config
     mock_signal_type_name = "mock_external_signal"
     mock_signal_value = "abcd1234ef5678901234567890abcdef"  # 32 char mock signal
-    
+
     # Mock signal type config
     mock_signal_config = MagicMock()
     mock_signal_config.enabled = True
@@ -154,12 +155,10 @@ def test_lookup_topk_with_mock(client_with_sample_data: FlaskClient):
     mock_index = MagicMock()
     mock_results = [
         IndexMatchUntyped(
-            metadata=1001,
-            similarity_info=MagicMock(pretty_str=lambda: "5")
+            metadata=1001, similarity_info=MagicMock(pretty_str=lambda: "5")
         ),
         IndexMatchUntyped(
-            metadata=1002,
-            similarity_info=MagicMock(pretty_str=lambda: "3")
+            metadata=1002, similarity_info=MagicMock(pretty_str=lambda: "3")
         ),
     ]
     mock_index.query_top_k.return_value = mock_results
@@ -172,26 +171,38 @@ def test_lookup_topk_with_mock(client_with_sample_data: FlaskClient):
         1002: {mock_signal_type_name: mock_signal_2},
     }
 
-    with patch.object(storage, 'get_signal_type_configs', return_value={mock_signal_type_name: mock_signal_config}):
-        with patch('OpenMediaMatch.blueprints.matching._get_index', return_value=mock_index):
-            with patch.object(storage, 'bank_content_get_signals', return_value=mock_signals):
-                query_str = {"signal": mock_signal_value, "signal_type": mock_signal_type_name, "k": "2"}
+    with patch.object(
+        storage,
+        "get_signal_type_configs",
+        return_value={mock_signal_type_name: mock_signal_config},
+    ):
+        with patch(
+            "OpenMediaMatch.blueprints.matching._get_index", return_value=mock_index
+        ):
+            with patch.object(
+                storage, "bank_content_get_signals", return_value=mock_signals
+            ):
+                query_str = {
+                    "signal": mock_signal_value,
+                    "signal_type": mock_signal_type_name,
+                    "k": "2",
+                }
                 resp = client.get("/m/lookup_topk", query_string=query_str)
-                
+
                 assert resp.status_code == 200
                 matches = resp.json["matches"]  # type: ignore
                 assert len(matches) == 2
-                
+
                 # Verify the first match has the correct signal
                 assert matches[0]["bank_content_id"] == 1001
                 assert matches[0]["signal"] == mock_signal_1
                 assert len(matches[0]["signal"]) == 32
-                
+
                 # Verify the second match
                 assert matches[1]["bank_content_id"] == 1002
                 assert matches[1]["signal"] == mock_signal_2
                 assert len(matches[1]["signal"]) == 32
-                
+
                 for match in matches:
                     assert "bank_content_id" in match
                     assert "distance" in match
@@ -213,13 +224,14 @@ def test_lookup_threshold(client_with_sample_data: FlaskClient):
         # Should return 501 if the signal type doesn't support query_threshold
         assert resp.status_code in [200, 501]
         if resp.status_code == 501:
+            assert resp.json is not None
             assert "does not support query_threshold" in resp.json.get("message", "")
 
     # Test missing threshold parameter with first signal type
     sig_name = list(storage.get_signal_type_configs().keys())[0]
     signal_cfg = storage.get_signal_type_configs()[sig_name]
     sig_str = signal_cfg.signal_type.get_examples()[0]
-    
+
     query_str = {"signal": sig_str, "signal_type": sig_name}
     resp = client.get("/m/lookup_threshold", query_string=query_str)
     assert resp.status_code == 400
@@ -230,11 +242,11 @@ def test_lookup_threshold_with_mock(client_with_sample_data: FlaskClient):
     client = client_with_sample_data
 
     storage = get_storage()
-    
+
     # Use a mock external signal type not in ThreatExchange config
     mock_signal_type_name = "mock_external_signal"
     mock_signal_value = "abcd1234ef5678901234567890abcdef"  # 32 char mock signal
-    
+
     # Mock signal type config
     mock_signal_config = MagicMock()
     mock_signal_config.enabled = True
@@ -249,61 +261,69 @@ def test_lookup_threshold_with_mock(client_with_sample_data: FlaskClient):
     mock_signal_1 = "1111222233334444555566667777aaaa"
     mock_signal_2 = "8888999900001111222233334444bbbb"
     mock_signal_3 = "ccccddddeeeefffff0000111122223333"
-    
+
     # Mock results for threshold 80
     mock_results_80 = [
         IndexMatchUntyped(
-            metadata=1001,
-            similarity_info=MagicMock(pretty_str=lambda: "0")
+            metadata=1001, similarity_info=MagicMock(pretty_str=lambda: "0")
         ),
         IndexMatchUntyped(
-            metadata=1002,
-            similarity_info=MagicMock(pretty_str=lambda: "68")
+            metadata=1002, similarity_info=MagicMock(pretty_str=lambda: "68")
         ),
         IndexMatchUntyped(
-            metadata=1003,
-            similarity_info=MagicMock(pretty_str=lambda: "75")
+            metadata=1003, similarity_info=MagicMock(pretty_str=lambda: "75")
         ),
     ]
-    
+
     # Mock results for threshold 50 (tighter, fewer results)
     mock_results_50 = [
         IndexMatchUntyped(
-            metadata=1001,
-            similarity_info=MagicMock(pretty_str=lambda: "0")
+            metadata=1001, similarity_info=MagicMock(pretty_str=lambda: "0")
         ),
     ]
-    
+
     mock_index.query_threshold.side_effect = lambda sig, thresh: (
         mock_results_50 if thresh == "50" else mock_results_80
     )
-    
+
     mock_signals = {
         1001: {mock_signal_type_name: mock_signal_1},
         1002: {mock_signal_type_name: mock_signal_2},
         1003: {mock_signal_type_name: mock_signal_3},
     }
 
-    with patch.object(storage, 'get_signal_type_configs', return_value={mock_signal_type_name: mock_signal_config}):
-        with patch('OpenMediaMatch.blueprints.matching._get_index', return_value=mock_index):
-            with patch.object(storage, 'bank_content_get_signals', return_value=mock_signals):
+    with patch.object(
+        storage,
+        "get_signal_type_configs",
+        return_value={mock_signal_type_name: mock_signal_config},
+    ):
+        with patch(
+            "OpenMediaMatch.blueprints.matching._get_index", return_value=mock_index
+        ):
+            with patch.object(
+                storage, "bank_content_get_signals", return_value=mock_signals
+            ):
                 # Test with threshold 80
-                query_str = {"signal": mock_signal_value, "signal_type": mock_signal_type_name, "threshold": "80"}
+                query_str = {
+                    "signal": mock_signal_value,
+                    "signal_type": mock_signal_type_name,
+                    "threshold": "80",
+                }
                 resp = client.get("/m/lookup_threshold", query_string=query_str)
                 assert resp.status_code == 200
                 matches_80 = resp.json["matches"]  # type: ignore
                 assert len(matches_80) == 3
-                
+
                 # Verify match structure and signals
                 assert matches_80[0]["bank_content_id"] == 1001
                 assert matches_80[0]["distance"] == "0"
                 assert matches_80[0]["signal"] == mock_signal_1
                 assert len(matches_80[0]["signal"]) == 32
-                
+
                 assert matches_80[1]["bank_content_id"] == 1002
                 assert matches_80[1]["distance"] == "68"
                 assert matches_80[1]["signal"] == mock_signal_2
-                
+
                 for match in matches_80:
                     assert "bank_content_id" in match
                     assert "distance" in match
@@ -311,11 +331,15 @@ def test_lookup_threshold_with_mock(client_with_sample_data: FlaskClient):
                     assert isinstance(match["bank_content_id"], int)
 
                 # Test with tighter threshold 50
-                query_str = {"signal": mock_signal_value, "signal_type": mock_signal_type_name, "threshold": "50"}
+                query_str = {
+                    "signal": mock_signal_value,
+                    "signal_type": mock_signal_type_name,
+                    "threshold": "50",
+                }
                 resp = client.get("/m/lookup_threshold", query_string=query_str)
                 assert resp.status_code == 200
                 matches_50 = resp.json["matches"]  # type: ignore
                 assert len(matches_50) == 1
-                
+
                 # Tighter threshold returns fewer matches
                 assert len(matches_50) < len(matches_80)
