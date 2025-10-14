@@ -204,7 +204,10 @@ def lookup_topk():
     """
     signal = require_request_param("signal")
     signal_type_name = require_request_param("signal_type")
-    k = int(require_request_param("k"))
+    try:
+        k = int(require_request_param("k"))
+    except ValueError:
+        abort(400, "k must be an integer")
 
     results = query_index_topk(signal, signal_type_name, k)
     storage = get_storage()
