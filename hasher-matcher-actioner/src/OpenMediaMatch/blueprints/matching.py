@@ -164,7 +164,7 @@ def lookup_threshold():
     Input:
      * Signal type (hash type)
      * Signal value (the hash)
-     * Threshold (int) - maximum distance for matches (required)
+     * Threshold - maximum distance for matches (required)
     Output:
      * List of matching with content_id, distance, and signal values
     """
