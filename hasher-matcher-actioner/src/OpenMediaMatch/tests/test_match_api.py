@@ -52,23 +52,25 @@ def _create_mock_signal_config(signal_value: str) -> t.Tuple[MagicMock, str]:
 
 def _create_mock_index(
     topk_results: t.Optional[t.List[IndexMatchUntyped]] = None,
-    threshold_behavior: t.Optional[t.Callable[[t.Any, str], t.List[IndexMatchUntyped]]] = None
+    threshold_behavior: t.Optional[
+        t.Callable[[t.Any, str], t.List[IndexMatchUntyped]]
+    ] = None,
 ) -> MagicMock:
     """
     Create a mock index with query_top_k and/or query_threshold methods.
-    
+
     Args:
         topk_results: List of results sorted by distance for query_top_k (returns first k)
         threshold_behavior: Callable that takes (signal, threshold) and returns filtered results
     """
     mock_index = MagicMock()
-    
+
     if topk_results is not None:
         mock_index.query_top_k.side_effect = lambda sig, k: topk_results[:k]
-    
+
     if threshold_behavior is not None:
         mock_index.query_threshold.side_effect = threshold_behavior
-    
+
     return mock_index
 
 
@@ -185,9 +187,15 @@ def test_lookup_topk_with_mock(client_with_sample_data: FlaskClient):
     mock_signal_value = "abcd1234ef5678901234567890abcdef"
 
     topk_results = [
-        IndexMatchUntyped(metadata=1002, similarity_info=MagicMock(pretty_str=lambda: "3")),
-        IndexMatchUntyped(metadata=1001, similarity_info=MagicMock(pretty_str=lambda: "5")),
-        IndexMatchUntyped(metadata=1003, similarity_info=MagicMock(pretty_str=lambda: "8")),
+        IndexMatchUntyped(
+            metadata=1002, similarity_info=MagicMock(pretty_str=lambda: "3")
+        ),
+        IndexMatchUntyped(
+            metadata=1001, similarity_info=MagicMock(pretty_str=lambda: "5")
+        ),
+        IndexMatchUntyped(
+            metadata=1003, similarity_info=MagicMock(pretty_str=lambda: "8")
+        ),
     ]
 
     mock_signal_config, _ = _create_mock_signal_config(mock_signal_value)
@@ -195,18 +203,22 @@ def test_lookup_topk_with_mock(client_with_sample_data: FlaskClient):
     mock_signals = _create_mock_signals(mock_signal_type_name)
 
     with patch.object(
-        storage, "get_signal_type_configs",
-        return_value={mock_signal_type_name: mock_signal_config}
+        storage,
+        "get_signal_type_configs",
+        return_value={mock_signal_type_name: mock_signal_config},
     ), patch(
         "OpenMediaMatch.blueprints.matching._get_index", return_value=mock_index
     ), patch.object(
         storage, "bank_content_get_signals", return_value=mock_signals
     ):
-        resp = client.get("/m/lookup_topk", query_string={
-            "signal": mock_signal_value,
-            "signal_type": mock_signal_type_name,
-            "k": "2",
-        })
+        resp = client.get(
+            "/m/lookup_topk",
+            query_string={
+                "signal": mock_signal_value,
+                "signal_type": mock_signal_type_name,
+                "k": "2",
+            },
+        )
 
         assert resp.status_code == 200
         matches = resp.json["matches"]  # type: ignore
@@ -253,13 +265,21 @@ def test_lookup_threshold_with_mock(client_with_sample_data: FlaskClient):
     def threshold_behavior(sig: t.Any, thresh: str) -> t.List[IndexMatchUntyped]:
         if thresh == "50":
             return [
-                IndexMatchUntyped(metadata=1001, similarity_info=MagicMock(pretty_str=lambda: "0")),
+                IndexMatchUntyped(
+                    metadata=1001, similarity_info=MagicMock(pretty_str=lambda: "0")
+                ),
             ]
         else:  # threshold 80
             return [
-                IndexMatchUntyped(metadata=1001, similarity_info=MagicMock(pretty_str=lambda: "0")),
-                IndexMatchUntyped(metadata=1002, similarity_info=MagicMock(pretty_str=lambda: "68")),
-                IndexMatchUntyped(metadata=1003, similarity_info=MagicMock(pretty_str=lambda: "75")),
+                IndexMatchUntyped(
+                    metadata=1001, similarity_info=MagicMock(pretty_str=lambda: "0")
+                ),
+                IndexMatchUntyped(
+                    metadata=1002, similarity_info=MagicMock(pretty_str=lambda: "68")
+                ),
+                IndexMatchUntyped(
+                    metadata=1003, similarity_info=MagicMock(pretty_str=lambda: "75")
+                ),
             ]
 
     mock_signal_config, _ = _create_mock_signal_config(mock_signal_value)
@@ -267,25 +287,32 @@ def test_lookup_threshold_with_mock(client_with_sample_data: FlaskClient):
     mock_signals = _create_mock_signals(mock_signal_type_name)
 
     with patch.object(
-        storage, "get_signal_type_configs",
-        return_value={mock_signal_type_name: mock_signal_config}
+        storage,
+        "get_signal_type_configs",
+        return_value={mock_signal_type_name: mock_signal_config},
     ), patch(
         "OpenMediaMatch.blueprints.matching._get_index", return_value=mock_index
     ), patch.object(
         storage, "bank_content_get_signals", return_value=mock_signals
     ):
-        resp = client.get("/m/lookup_threshold", query_string={
-            "signal": mock_signal_value,
-            "signal_type": mock_signal_type_name,
-            "threshold": "80",
-        })
+        resp = client.get(
+            "/m/lookup_threshold",
+            query_string={
+                "signal": mock_signal_value,
+                "signal_type": mock_signal_type_name,
+                "threshold": "80",
+            },
+        )
         assert resp.status_code == 200
         assert len(resp.json["matches"]) == 3  # type: ignore
 
-        resp = client.get("/m/lookup_threshold", query_string={
-            "signal": mock_signal_value,
-            "signal_type": mock_signal_type_name,
-            "threshold": "50",
-        })
+        resp = client.get(
+            "/m/lookup_threshold",
+            query_string={
+                "signal": mock_signal_value,
+                "signal_type": mock_signal_type_name,
+                "threshold": "50",
+            },
+        )
         assert resp.status_code == 200
         assert len(resp.json["matches"]) == 1  # type: ignore
