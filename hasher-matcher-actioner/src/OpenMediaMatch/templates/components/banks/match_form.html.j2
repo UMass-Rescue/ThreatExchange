@@ -48,7 +48,7 @@
                 <select class="form-select" name="signal_type" id="signal-type">
                     <option selected disabled value="">Select signal type</option>
                     {% for s in signal %}
-                        {% if s['enabled'] %}
+                        {% if s['enabled_ratio'] > 0 %}
                             <option value="{{s['name']}}">{{s['name'].upper()}}</option>
                         {% endif %}
                     {% endfor %}
