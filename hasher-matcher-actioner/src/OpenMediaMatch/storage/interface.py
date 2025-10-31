@@ -321,7 +321,7 @@ class BankContentConfig:
     disable_until_ts: int
     # If this content is originally from a collaboration, includes
     # the name of the collaboration as well as the keys for use with
-    # ICollaborationStore.get_collab_data
+    # ICollaborationStore.get_collab_data. Can also store filename and other metadata.
     collab_metadata: t.Mapping[str, t.Sequence[str]]
     original_media_uri: t.Optional[str]
 

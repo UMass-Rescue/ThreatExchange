@@ -218,9 +218,23 @@ def bank_add_content(bank_name: str):
     # Url was passed as a query param?
     if request.args.get("url", None):
         hashes = hashing.hash_media()
+        file_metadata = None
     # File uploaded via multipart/form-data?
     elif request.files:
-        hashes = hashing.hash_media_from_form_data()
+        hash_result = hashing.hash_media_from_form_data_with_metadata()
+        hashes = hash_result["hashes"]
+        file_metadata = hash_result["metadata"]
+        
+        # Merge file metadata with user-provided metadata
+        if metadata is None:
+            metadata = {"json": {}}
+        
+        # Initialize json field if it doesn't exist
+        if "json" not in metadata:
+            metadata["json"] = {}
+        
+        # Add filename and other file metadata to the json field
+        metadata["json"].update(file_metadata)
     else:
         abort(400, "Neither `url` nor multipart file upload was received")
     return _bank_add_signals(bank, hashes, metadata)
@@ -247,10 +261,22 @@ def _bank_add_signals(
         except Exception as e:
             abort(400, f"Invalid {name} signal: {str(e)}")
 
+    # Extract metadata and store filename info in collab_metadata
+    collab_metadata = {}
+    if metadata and "json" in metadata:
+        # Convert file metadata to string sequences for collab_metadata format
+        for key, value in metadata["json"].items():
+            if isinstance(value, str):
+                collab_metadata[key] = [value]
+            elif isinstance(value, (list, tuple)):
+                collab_metadata[key] = [str(v) for v in value]
+            else:
+                collab_metadata[key] = [str(value)]
+
     content_config = iface.BankContentConfig(
         id=0,
         disable_until_ts=iface.BankContentConfig.ENABLED,
-        collab_metadata={},
+        collab_metadata=collab_metadata,
         original_media_uri=None,
         bank=bank,
     )
