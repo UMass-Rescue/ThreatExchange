@@ -316,6 +316,8 @@ def test_lookup_threshold_with_mock(client_with_sample_data: FlaskClient):
         )
         assert resp.status_code == 200
         assert len(resp.json["matches"]) == 1  # type: ignore
+
+
 @pytest.fixture()
 def client_with_multi_bank_data(app) -> FlaskClient:
     """Fixture that sets up multiple banks with sample data for testing bank filtering."""
