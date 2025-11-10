@@ -53,7 +53,7 @@ def _create_mock_signal_config(signal_value: str) -> t.Tuple[MagicMock, str]:
 def _create_mock_index(
     topk_results: t.Optional[t.List[IndexMatchUntyped]] = None,
     threshold_behavior: t.Optional[
-        t.Callable[[t.Any, str], t.List[IndexMatchUntyped]]
+        t.Callable[[t.Any, int], t.List[IndexMatchUntyped]]
     ] = None,
 ) -> MagicMock:
     """
