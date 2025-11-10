@@ -169,13 +169,16 @@ def lookup_threshold():
     Input:
      * Signal type (hash type)
      * Signal value (the hash)
-     * Threshold - maximum distance for matches (required)
+     * Threshold (int) - maximum distance for matches (required)
     Output:
      * List of matching with content_id, distance, and signal values
     """
     signal = require_request_param("signal")
     signal_type_name = require_request_param("signal_type")
-    threshold = require_request_param("threshold")
+    try:
+        threshold = int(require_request_param("threshold"))
+    except ValueError:
+        abort(400, "threshold must be an integer")
 
     results = query_index_threshold(signal, signal_type_name, threshold)
     storage = get_storage()
@@ -252,7 +255,7 @@ def query_index(
 
 
 def query_index_threshold(
-    signal: str, signal_type_name: str, threshold: str
+    signal: str, signal_type_name: str, threshold: int
 ) -> t.Sequence[IndexMatchUntyped[SignalSimilarityInfo, int]]:
     storage = get_storage()
     signal_type = _validate_and_transform_signal_type(signal_type_name, storage)
