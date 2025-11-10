@@ -262,8 +262,8 @@ def test_lookup_threshold_with_mock(client_with_sample_data: FlaskClient):
     mock_signal_type_name = "mock_external_signal"
     mock_signal_value = "abcd1234ef5678901234567890abcdef"
 
-    def threshold_behavior(sig: t.Any, thresh: str) -> t.List[IndexMatchUntyped]:
-        if thresh == "50":
+    def threshold_behavior(sig: t.Any, thresh: int) -> t.List[IndexMatchUntyped]:
+        if thresh == 50:
             return [
                 IndexMatchUntyped(
                     metadata=1001, similarity_info=MagicMock(pretty_str=lambda: "0")
