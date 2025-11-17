@@ -169,7 +169,7 @@ def lookup_threshold():
     Input:
      * Signal type (hash type)
      * Signal value (the hash)
-     * Threshold (int or float) - maximum distance for matches (required)
+     * Threshold (int) - maximum distance for matches (required)
     Output:
      * List of matching with content_id, distance, and signal values
     """
@@ -193,13 +193,9 @@ def lookup_threshold():
         abort(400, "threshold is required")
 
     try:
-        # Try to parse as float first (which works for both int and float)
-        threshold = float(threshold_str)
-        # If it's actually an integer value, convert to int
-        if threshold.is_integer():
-            threshold = int(threshold)
+        threshold = int(threshold_str)
     except (ValueError, TypeError):
-        abort(400, "threshold must be a number (int or float)")
+        abort(400, "threshold must be an integer")
 
     results = query_index_threshold(signal, signal_type_name, threshold)
     storage = get_storage()
@@ -292,7 +288,7 @@ def query_index(
 
 
 def query_index_threshold(
-    signal: str, signal_type_name: str, threshold: t.Union[int, float]
+    signal: str, signal_type_name: str, threshold: int
 ) -> t.Sequence[IndexMatchUntyped[SignalSimilarityInfo, int]]:
     storage = get_storage()
     signal_type = _validate_and_transform_signal_type(signal_type_name, storage)
@@ -637,10 +633,9 @@ def compare():
     Example input:
     {
         "pdq": ["facd8b...", "facd8b..."],
-        "clip": ["52dadfbc...", "52dadfbc..."],
-        "clip_float": ["3f8000003f800000...", "3f8000003f800000..."]
+        "not_pdq": ["bdec19...","bdec19..."]
     }
-    Example output (works for both int and float distances):
+    Example output
     {
         "pdq": [
             true,
@@ -648,18 +643,12 @@ def compare():
                 "distance": 9
             }
         ],
-        "clip": [
+        "not_pdq": 20
             true,
             {
-                "distance": 8
+                "distance": 341
             }
-        ],
-        "clip_float": [
-            true,
-            {
-                "distance": 0.05
-            }
-        ]
+        }
     }
     """
     request_data = request.get_json()
@@ -678,19 +667,7 @@ def compare():
             left = signal_type.validate_signal_str(hashes_to_compare[0])
             right = signal_type.validate_signal_str(hashes_to_compare[1])
             comparison = signal_type.compare_hash(left, right)
-            # Serialize the comparison result properly
-            # Extract the actual distance value (int or float) from SignalSimilarityInfo
-            if hasattr(comparison.distance, "distance"):
-                # SignalSimilarityInfoWithSingleDistance has a distance attribute
-                distance_value = comparison.distance.distance
-            else:
-                # Fallback for other SignalSimilarityInfo types
-                distance_value = comparison.distance.pretty_str()
-
-            results[signal_type_str] = [
-                comparison.match,
-                {"distance": distance_value},
-            ]
+            results[signal_type_str] = comparison
         except Exception as e:
             abort(400, f"Invalid {signal_type_str} hash: {e}")
     return results
