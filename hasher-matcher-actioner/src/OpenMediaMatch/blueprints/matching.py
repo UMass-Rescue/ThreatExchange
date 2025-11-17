@@ -494,7 +494,10 @@ def lookup_post() -> t.Union[TMatchByBank, TBankMatchBySignalType]:
         signal_type_name = data.get("signal_type")
 
         if not signal or not signal_type_name:
-            abort(400, "For JSON POST to /lookup, 'signal' and 'signal_type' are required.")
+            abort(
+                400,
+                "For JSON POST to /lookup, 'signal' and 'signal_type' are required.",
+            )
 
         bypass_coinflip = data.get("bypass_coinflip", False)
         banks_param = data.get("banks")
