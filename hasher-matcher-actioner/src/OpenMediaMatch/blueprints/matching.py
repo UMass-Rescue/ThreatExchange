@@ -189,13 +189,17 @@ def lookup_threshold():
     if not signal_type_name:
         abort(400, "signal_type is required")
     threshold_str = params.get("threshold")
-    if not threshold_str:
+    if threshold_str is None:
         abort(400, "threshold is required")
 
     try:
-        threshold = int(threshold_str)
+        # Try to parse as float first (which works for both int and float)
+        threshold = float(threshold_str)
+        # If it's actually an integer value, convert to int
+        if threshold.is_integer():
+            threshold = int(threshold)
     except (ValueError, TypeError):
-        abort(400, "threshold must be an integer")
+        abort(400, "threshold must be a number (int or float)")
 
     results = query_index_threshold(signal, signal_type_name, threshold)
     storage = get_storage()
@@ -242,7 +246,7 @@ def lookup_topk():
     if not signal_type_name:
         abort(400, "signal_type is required")
     k_str = params.get("k")
-    if not k_str:
+    if k_str is None:
         abort(400, "k is required")
 
     try:
