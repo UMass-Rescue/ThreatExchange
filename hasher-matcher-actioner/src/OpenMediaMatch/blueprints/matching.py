@@ -292,7 +292,7 @@ def query_index(
 
 
 def query_index_threshold(
-    signal: str, signal_type_name: str, threshold: int
+    signal: str, signal_type_name: str, threshold: t.Union[int, float]
 ) -> t.Sequence[IndexMatchUntyped[SignalSimilarityInfo, int]]:
     storage = get_storage()
     signal_type = _validate_and_transform_signal_type(signal_type_name, storage)
@@ -671,7 +671,19 @@ def compare():
             left = signal_type.validate_signal_str(hashes_to_compare[0])
             right = signal_type.validate_signal_str(hashes_to_compare[1])
             comparison = signal_type.compare_hash(left, right)
-            results[signal_type_str] = comparison
+            # Serialize the comparison result properly
+            # Extract the actual distance value (int or float) from SignalSimilarityInfo
+            if hasattr(comparison.distance, "distance"):
+                # SignalSimilarityInfoWithSingleDistance has a distance attribute
+                distance_value = comparison.distance.distance
+            else:
+                # Fallback for other SignalSimilarityInfo types
+                distance_value = comparison.distance.pretty_str()
+
+            results[signal_type_str] = [
+                comparison.match,
+                {"distance": distance_value},
+            ]
         except Exception as e:
             abort(400, f"Invalid {signal_type_str} hash: {e}")
     return results
