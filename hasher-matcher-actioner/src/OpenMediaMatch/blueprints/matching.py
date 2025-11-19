@@ -671,18 +671,11 @@ def compare():
             left = signal_type.validate_signal_str(hashes_to_compare[0])
             right = signal_type.validate_signal_str(hashes_to_compare[1])
             comparison = signal_type.compare_hash(left, right)
-            # Serialize the comparison result properly
-            # Extract the actual distance value (int or float) from SignalSimilarityInfo
-            if hasattr(comparison.distance, "distance"):
-                # SignalSimilarityInfoWithSingleDistance has a distance attribute
-                distance_value = comparison.distance.distance
-            else:
-                # Fallback for other SignalSimilarityInfo types
-                distance_value = comparison.distance.pretty_str()
-
+            # Serialize SignalComparisonResult for JSON
+            # NamedTuple with SignalSimilarityInfo needs manual serialization
             results[signal_type_str] = [
                 comparison.match,
-                {"distance": distance_value},
+                {"distance": comparison.distance.pretty_str()},
             ]
         except Exception as e:
             abort(400, f"Invalid {signal_type_str} hash: {e}")
