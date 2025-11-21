@@ -483,14 +483,8 @@ def lookup_post() -> t.Union[TMatchByBank, TBankMatchBySignalType]:
     if request.is_json:
         # Direct signal lookup
         data = request.get_json()
-        signal = data.get("signal")
-        signal_type_name = data.get("signal_type")
-
-        if not signal or not signal_type_name:
-            abort(
-                400,
-                "For JSON POST to /lookup, 'signal' and 'signal_type' are required.",
-            )
+        signal = require_param_from_dict(data, "signal")
+        signal_type_name = require_param_from_dict(data, "signal_type")
 
         bypass_coinflip = data.get("bypass_coinflip", False)
         banks_param = data.get("banks")
