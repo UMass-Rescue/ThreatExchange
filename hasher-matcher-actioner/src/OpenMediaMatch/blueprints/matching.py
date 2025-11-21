@@ -27,6 +27,7 @@ from OpenMediaMatch.storage import interface
 from OpenMediaMatch.blueprints import hashing
 from OpenMediaMatch.utils.flask_utils import (
     api_error_handler,
+    require_param_from_dict,
     require_request_param,
     str_to_bool,
 )
@@ -182,15 +183,9 @@ def lookup_threshold():
     else:  # GET
         params = request.args
 
-    signal = params.get("signal")
-    if not signal:
-        abort(400, "signal is required")
-    signal_type_name = params.get("signal_type")
-    if not signal_type_name:
-        abort(400, "signal_type is required")
-    threshold_str = params.get("threshold")
-    if threshold_str is None:
-        abort(400, "threshold is required")
+    signal = require_param_from_dict(params, "signal")
+    signal_type_name = require_param_from_dict(params, "signal_type")
+    threshold_str = require_param_from_dict(params, "threshold")
 
     try:
         # Try to parse as float first (which works for both int and float)
@@ -239,15 +234,9 @@ def lookup_topk():
     else:  # GET
         params = request.args
 
-    signal = params.get("signal")
-    if not signal:
-        abort(400, "signal is required")
-    signal_type_name = params.get("signal_type")
-    if not signal_type_name:
-        abort(400, "signal_type is required")
-    k_str = params.get("k")
-    if k_str is None:
-        abort(400, "k is required")
+    signal = require_param_from_dict(params, "signal")
+    signal_type_name = require_param_from_dict(params, "signal_type")
+    k_str = require_param_from_dict(params, "k")
 
     try:
         k = int(k_str)

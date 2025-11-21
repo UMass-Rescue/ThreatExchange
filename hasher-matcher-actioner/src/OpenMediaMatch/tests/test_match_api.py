@@ -14,7 +14,7 @@ from threatexchange.exchanges.impl.static_sample import StaticSampleSignalExchan
 from OpenMediaMatch.tests.utils import app
 
 from OpenMediaMatch.background_tasks import fetcher, build_index
-from OpenMediaMatch.blueprints.matching import TMatchByBank, TBankMatchBySignalType
+from OpenMediaMatch.blueprints.matching import TMatchByBank
 from OpenMediaMatch.persistence import get_storage
 from OpenMediaMatch.storage import interface as iface
 
