@@ -146,6 +146,37 @@ def test_lookups(client_with_sample_data: FlaskClient):
             assert "distance" in match
 
 
+def test_lookup_post_signal(client_with_sample_data: FlaskClient):
+    """Test the /lookup endpoint with a POST request containing a signal."""
+    client = client_with_sample_data
+
+    storage = get_storage()
+    sig_name = PdqSignal.get_name()
+    signal_cfg = storage.get_signal_type_configs()[sig_name]
+    sig_str = signal_cfg.signal_type.get_examples()[0]
+
+    post_data = {"signal": sig_str, "signal_type": sig_name}
+
+    resp = client.post("/m/lookup", json=post_data)
+    assert resp.status_code == 200
+    resp_json = t.cast(TMatchByBank, resp.json)
+
+    assert "SAMPLE" in resp_json
+    assert len(resp_json["SAMPLE"]) > 0
+
+    # Test with banks parameter
+    post_data["banks"] = "SAMPLE"
+    resp = client.post("/m/lookup", json=post_data)
+    assert resp.status_code == 200
+    resp_json = t.cast(TMatchByBank, resp.json)
+    assert len(resp_json) == 1
+
+    # Test with missing signal
+    post_data = {"signal_type": sig_name}
+    resp = client.post("/m/lookup", json=post_data)
+    assert resp.status_code == 400
+
+
 def test_lookup_topk(client_with_sample_data: FlaskClient):
     """Test the lookup_topk endpoint."""
     client = client_with_sample_data
@@ -225,6 +256,38 @@ def test_lookup_topk_with_mock(client_with_sample_data: FlaskClient):
         assert len(matches) == 2
         assert matches[0]["bank_content_id"] == 1002
         assert matches[1]["bank_content_id"] == 1001
+
+
+def test_lookup_topk_post(client_with_sample_data: FlaskClient):
+    """Test the lookup_topk endpoint with POST."""
+    client = client_with_sample_data
+
+    storage = get_storage()
+    # Test with all configured signal types - they should return 501 if unsupported
+    for sig_name, signal_cfg in storage.get_signal_type_configs().items():
+        sig_str = signal_cfg.signal_type.get_examples()[0]
+
+        post_data = {"signal": sig_str, "signal_type": sig_name, "k": "3"}
+        resp = client.post("/m/lookup_topk", json=post_data)
+        # Should return 501 if the signal type doesn't support query_top_k
+        assert resp.status_code in [200, 501]
+        if resp.status_code == 501:
+            assert resp.json is not None
+            assert "does not support query_top_k" in resp.json.get("message", "")
+
+    # Test missing k parameter with first signal type
+    sig_name = list(storage.get_signal_type_configs().keys())[0]
+    signal_cfg = storage.get_signal_type_configs()[sig_name]
+    sig_str = signal_cfg.signal_type.get_examples()[0]
+
+    post_data = {"signal": sig_str, "signal_type": sig_name}
+    resp = client.post("/m/lookup_topk", json=post_data)
+    assert resp.status_code == 400
+
+    # Test invalid k parameter
+    post_data = {"signal": sig_str, "signal_type": sig_name, "k": "invalid"}
+    resp = client.post("/m/lookup_topk", json=post_data)
+    assert resp.status_code == 400
 
 
 def test_lookup_threshold(client_with_sample_data: FlaskClient):
@@ -316,6 +379,33 @@ def test_lookup_threshold_with_mock(client_with_sample_data: FlaskClient):
         )
         assert resp.status_code == 200
         assert len(resp.json["matches"]) == 1  # type: ignore
+
+
+def test_lookup_threshold_post(client_with_sample_data: FlaskClient):
+    """Test the lookup_threshold endpoint with POST."""
+    client = client_with_sample_data
+
+    storage = get_storage()
+    # Test with all configured signal types - they should return 501 if unsupported
+    for sig_name, signal_cfg in storage.get_signal_type_configs().items():
+        sig_str = signal_cfg.signal_type.get_examples()[0]
+
+        post_data = {"signal": sig_str, "signal_type": sig_name, "threshold": "10"}
+        resp = client.post("/m/lookup_threshold", json=post_data)
+        # Should return 501 if the signal type doesn't support query_threshold
+        assert resp.status_code in [200, 501]
+        if resp.status_code == 501:
+            assert resp.json is not None
+            assert "does not support query_threshold" in resp.json.get("message", "")
+
+    # Test missing threshold parameter with first signal type
+    sig_name = list(storage.get_signal_type_configs().keys())[0]
+    signal_cfg = storage.get_signal_type_configs()[sig_name]
+    sig_str = signal_cfg.signal_type.get_examples()[0]
+
+    post_data = {"signal": sig_str, "signal_type": sig_name}
+    resp = client.post("/m/lookup_threshold", json=post_data)
+    assert resp.status_code == 400
 
 
 @pytest.fixture()

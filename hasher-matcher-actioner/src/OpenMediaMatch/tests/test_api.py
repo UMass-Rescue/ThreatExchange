@@ -146,7 +146,7 @@ def test_compare_hashes(app: Flask, client: FlaskClient):
     specimen2 = "facd8bcb2a49bcebdec1985228d5ae84bcd006c187c598c720c2b087b3fdb318"
     # Happy path
     resp = client.post("/m/compare", json={"pdq": [specimen1, specimen2]})
-    assert resp.json == {"pdq": [True, {"distance": 9}]}
+    assert resp.json == {"pdq": [True, {"distance": "9"}]}
 
     # Malformed input
     bad_inputs = [

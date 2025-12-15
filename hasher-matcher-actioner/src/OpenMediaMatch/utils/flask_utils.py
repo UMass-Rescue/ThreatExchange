@@ -36,6 +36,18 @@ def require_request_param(name: str) -> str:
     return ret
 
 
+def require_param_from_dict(params: t.Mapping[str, t.Any], name: str) -> str:
+    """
+    Wrapper around a required parameter from a params dict.
+
+    aborts with 400 if it's missing.
+    """
+    ret = params.get(name)
+    if ret is None:
+        abort(400, f"{name} is required")
+    return ret
+
+
 def require_json_param(name: str) -> str:
     """
     Wrapper around a required POST json parameter.

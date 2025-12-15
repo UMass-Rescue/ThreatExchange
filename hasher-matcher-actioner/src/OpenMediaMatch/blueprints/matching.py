@@ -27,6 +27,7 @@ from OpenMediaMatch.storage import interface
 from OpenMediaMatch.blueprints import hashing
 from OpenMediaMatch.utils.flask_utils import (
     api_error_handler,
+    require_param_from_dict,
     require_request_param,
     str_to_bool,
 )
@@ -158,7 +159,7 @@ def raw_lookup():
     return {"matches": lookup_signal_func(signal, signal_type_name, requested_banks)}
 
 
-@bp.route("/lookup_threshold")
+@bp.route("/lookup_threshold", methods=["GET", "POST"])
 def lookup_threshold():
     """
     Look up a hash in the similarity index using a custom threshold.
@@ -173,12 +174,27 @@ def lookup_threshold():
     Output:
      * List of matching with content_id, distance, and signal values
     """
-    signal = require_request_param("signal")
-    signal_type_name = require_request_param("signal_type")
+
+    if request.method == "POST":
+        if request.is_json:
+            params = request.get_json()
+        else:
+            params = request.form
+    else:  # GET
+        params = request.args
+
+    signal = require_param_from_dict(params, "signal")
+    signal_type_name = require_param_from_dict(params, "signal_type")
+    threshold_str = require_param_from_dict(params, "threshold")
+
     try:
-        threshold = int(require_request_param("threshold"))
-    except ValueError:
-        abort(400, "threshold must be an integer")
+        # Try to parse as float first (which works for both int and float)
+        threshold = float(threshold_str)
+        # If it's actually an integer value, convert to int
+        if threshold.is_integer():
+            threshold = int(threshold)
+    except (ValueError, TypeError):
+        abort(400, "threshold must be a number (int or float)")
 
     results = query_index_threshold(signal, signal_type_name, threshold)
     storage = get_storage()
@@ -196,7 +212,7 @@ def lookup_threshold():
     return {"matches": matches}
 
 
-@bp.route("/lookup_topk")
+@bp.route("/lookup_topk", methods=["GET", "POST"])
 def lookup_topk():
     """
     Look up the top K closest matches for a hash in the similarity index.
@@ -210,11 +226,21 @@ def lookup_topk():
     Output:
      * List of matching with content_id, distance, and signal values
     """
-    signal = require_request_param("signal")
-    signal_type_name = require_request_param("signal_type")
+    if request.method == "POST":
+        if request.is_json:
+            params = request.get_json()
+        else:
+            params = request.form
+    else:  # GET
+        params = request.args
+
+    signal = require_param_from_dict(params, "signal")
+    signal_type_name = require_param_from_dict(params, "signal_type")
+    k_str = require_param_from_dict(params, "k")
+
     try:
-        k = int(require_request_param("k"))
-    except ValueError:
+        k = int(k_str)
+    except (ValueError, TypeError):
         abort(400, "k must be an integer")
 
     results = query_index_topk(signal, signal_type_name, k)
@@ -255,7 +281,7 @@ def query_index(
 
 
 def query_index_threshold(
-    signal: str, signal_type_name: str, threshold: int
+    signal: str, signal_type_name: str, threshold: t.Union[int, float]
 ) -> t.Sequence[IndexMatchUntyped[SignalSimilarityInfo, int]]:
     storage = get_storage()
     signal_type = _validate_and_transform_signal_type(signal_type_name, storage)
@@ -432,36 +458,59 @@ def lookup_get() -> t.Union[TMatchByBank, TBankMatchBySignalType]:
 
 
 @bp.route("/lookup", methods=["POST"])
-def lookup_post() -> TBankMatchBySignalType:
+def lookup_post() -> t.Union[TMatchByBank, TBankMatchBySignalType]:
     """
-    Look up the hash for the uploaded file in the similarity index.
-    @see OpenMediaMatch.blueprints.hashing hash_media_from_form_data()
+    Look up a signal in the similarity index. The signal can be provided
+    directly in a JSON body, or a file can be uploaded to be hashed.
 
     Input:
+     Either (as JSON):
+     * Signal type (hash type)
+     * Signal value (the hash)
+     Or (as multipart/form-data):
      * Uploaded file.
+
+     Also (applies to both cases):
      * Optional seed (content id) for consistent coinflip
+     * Optional list of banks to restrict search to
     Output:
-     * JSON object keyed by signal type to bank matches
+     * If a signal and signal_type are provided in a JSON POST, returns a
+       JSON object of bank matches (TMatchByBank).
+     * If a file is uploaded, returns a JSON object keyed by signal
+       type to bank matches (TBankMatchBySignalType).
        (@see lookup_get)
     """
-    if not current_app.config.get("ROLE_HASHER", False):
-        abort(403, "Hashing is disabled, missing role")
+    if request.is_json:
+        # Direct signal lookup
+        data = request.get_json()
+        signal = require_param_from_dict(data, "signal")
+        signal_type_name = require_param_from_dict(data, "signal_type")
 
-    hashes = hashing.hash_media_from_form_data()
-    bypass_coinflip = request.args.get("bypass_coinflip", "false") == "true"
+        bypass_coinflip = data.get("bypass_coinflip", False)
+        banks_param = data.get("banks")
+        requested_banks = set(banks_param.split(",")) if banks_param else None
 
-    # Parse optional banks parameter
-    banks_param = request.args.get("banks")
-    requested_banks = set(banks_param.split(",")) if banks_param else None
+        return lookup(signal, signal_type_name, bypass_coinflip, requested_banks)
+    else:
+        # File upload lookup
+        if not current_app.config.get("ROLE_HASHER", False):
+            abort(403, "Hashing is disabled, missing role")
 
-    resp = {}
-    for signal_type in hashes.keys():
-        signal = hashes[signal_type]
-        resp[signal_type] = lookup(
-            signal, signal_type, bypass_coinflip, requested_banks
-        )
+        hashes = hashing.hash_media_from_form_data()
+        bypass_coinflip = request.args.get("bypass_coinflip", "false") == "true"
 
-    return resp
+        # Parse optional banks parameter
+        banks_param = request.args.get("banks")
+        requested_banks = set(banks_param.split(",")) if banks_param else None
+
+        resp = {}
+        for signal_type in hashes.keys():
+            signal = hashes[signal_type]
+            resp[signal_type] = lookup(
+                signal, signal_type, bypass_coinflip, requested_banks
+            )
+
+        return resp
 
 
 def lookup(
@@ -605,7 +654,12 @@ def compare():
             left = signal_type.validate_signal_str(hashes_to_compare[0])
             right = signal_type.validate_signal_str(hashes_to_compare[1])
             comparison = signal_type.compare_hash(left, right)
-            results[signal_type_str] = comparison
+            # Serialize SignalComparisonResult for JSON
+            # NamedTuple with SignalSimilarityInfo needs manual serialization
+            results[signal_type_str] = [
+                comparison.match,
+                {"distance": comparison.distance.pretty_str()},
+            ]
         except Exception as e:
             abort(400, f"Invalid {signal_type_str} hash: {e}")
     return results
