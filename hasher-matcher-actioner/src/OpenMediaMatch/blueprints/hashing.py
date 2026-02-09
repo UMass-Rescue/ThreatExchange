@@ -246,6 +246,111 @@ def hash_media_from_form_data() -> dict[str, str]:
     return ret
 
 
+@bp.route("/hash/batch", methods=["POST"])
+def hash_media_batch():
+    """
+    Calculate hashes for multiple files in a single request.
+    
+    Optimized for batch processing, particularly beneficial for GPU-accelerated
+    hashers where processing multiple images together provides
+    5-10x throughput improvements.
+    
+    Input:
+        * files - multipart/form-data with multiple files
+        * Query params: signal_type (optional) - single signal type name. If omitted, all enabled signal types are computed.
+    
+    Output:
+        * List of objects mapping signal types to hash values
+    """
+    if not request.files:
+        abort(400, "Missing multipart/form-data file upload")
+    
+    # Collect all files
+    files_data = []
+    for field_name in request.files.keys():
+        content_type = _lookup_content_type(field_name)
+        all_signal_types = get_storage().get_enabled_signal_types_for_content_type(content_type)
+        
+        if not all_signal_types:
+            abort(500, "No signal types configured!")
+        
+        # Filter to single signal type if specified
+        signal_type_name = request.args.get("signal_type", None)
+        if signal_type_name:
+            signal_type_name = signal_type_name.strip()
+            if signal_type_name not in all_signal_types:
+                abort(400, f"Signal type '{signal_type_name}' doesn't exist or is disabled")
+            signal_types = {signal_type_name: all_signal_types[signal_type_name]}
+        else:
+            signal_types = all_signal_types
+        
+        for file in request.files.getlist(field_name):
+            files_data.append((file.filename or "unknown", file.stream.read(), signal_types))
+    
+    if not files_data:
+        abort(400, "No files provided")
+    
+    # Check for batch-capable signal types (e.g., CLIP with hash_from_file_list)
+    batch_capable = {}
+    for st_name, st in files_data[0][2].items():
+        if hasattr(st, 'hash_from_file_list') and issubclass(st, FileHasher):
+            batch_capable[st_name] = st
+    
+    # Process batch-capable types together
+    batch_results = {}
+    if batch_capable:
+        temp_files = []
+        try:
+            # Write all files to temp locations
+            for filename, file_bytes, _ in files_data:
+                tmp = tempfile.NamedTemporaryFile("wb", delete=False, suffix=Path(filename).suffix)
+                tmp.write(file_bytes)
+                tmp.close()
+                temp_files.append(Path(tmp.name))
+            
+            # Batch process each batch-capable signal type
+            for st_name, st in batch_capable.items():
+                try:
+                    batch_outputs = st.hash_from_file_list(temp_files)
+                    # Convert CLIPOutput or other objects to strings
+                    batch_results[st_name] = [str(h) for h in batch_outputs]
+                except Exception as e:
+                    current_app.logger.error("Batch hashing failed for %s: %s", st_name, str(e))
+                    batch_results[st_name] = None
+        finally:
+            # Clean up temp files
+            for temp_file in temp_files:
+                try:
+                    temp_file.unlink()
+                except Exception:
+                    pass
+    
+    # Build results for each file (results are returned in the same order as files were uploaded)
+    results = []
+    for idx, (filename, file_bytes, signal_types) in enumerate(files_data):
+        file_result = {}
+        
+        for st_name, st in signal_types.items():
+            try:
+                if st_name in batch_results and batch_results[st_name]:
+                    # Use batch result
+                    file_result[st_name] = batch_results[st_name][idx]
+                elif issubclass(st, BytesHasher):
+                    file_result[st_name] = st.hash_from_bytes(file_bytes)
+                elif issubclass(st, FileHasher):
+                    with tempfile.NamedTemporaryFile("wb") as tmp:
+                        tmp.file.write(file_bytes)
+                        path = Path(tmp.name)
+                        file_result[st_name] = st.hash_from_file(path)
+            except Exception as e:
+                current_app.logger.warning("Failed to hash %s with %s: %s", filename, st_name, str(e))
+                file_result[st_name] = ""
+        
+        results.append(file_result)
+    
+    return results
+
+
 def _parse_request_content_type(url_content_type: str) -> t.Type[ContentType]:
     arg = request.args.get("content_type", "")
     if not arg:
