@@ -10,6 +10,7 @@ with warnings.catch_warnings():
 # Resume regularly scheduled imports
 
 import logging
+import logging.config
 import os
 import datetime
 import sys

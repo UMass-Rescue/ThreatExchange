@@ -185,6 +185,92 @@ Example:
 curl -s -X POST --form photo='@example.png' http://localhost:5100/h/hash
 ```
 
+### Batch hashing content
+
+This endpoint allows you to hash multiple files in a single request. This is particularly beneficial for GPU-accelerated hashers (like CLIP) where batch processing can provide 5-10x throughput improvements compared to processing files individually.
+
+This endpoint uses a `multipart/form-data` request body. The field name is the ContentType (typically `photo` or `video`). Multiple files can be uploaded using the same field name.
+
+Endpoint: `POST /h/hash/batch`
+Query parameters:
+- `signal_type` (optional): Single signal type name (e.g., `signal_type=clip`). If omitted, all enabled signal types are computed.
+
+Sample JSON response when computing all signal types (results are returned in the same order as files were uploaded):
+```json
+[
+  {
+    "pdq": "d811ac390bfa6005d08543fe27fd5a11f6b55bdd2603000dc26476fc79fc76b5",
+    "clip": "0110101010..."
+  },
+  {
+    "pdq": "fff0f0cce0e4a04f6b55bdd2603000dc26476fc79fc76b5",
+    "clip": "1010101010..."
+  }
+]
+```
+
+Sample JSON response when `signal_type=clip` is specified:
+```json
+[
+  {
+    "clip": "0110101010..."
+  },
+  {
+    "clip": "1010101010..."
+  }
+]
+```
+
+Example using curl (all enabled signal types):
+```bash
+curl -X POST \
+  -F "photo=@/path/to/image1.jpg" \
+  -F "photo=@/path/to/image2.png" \
+  http://localhost:5100/h/hash/batch
+```
+
+Example using curl (single signal type):
+```bash
+curl -X POST \
+  -F "photo=@/path/to/image1.jpg" \
+  -F "photo=@/path/to/image2.png" \
+  "http://localhost:5100/h/hash/batch?signal_type=clip"
+```
+
+Example using Python:
+```python
+import requests
+
+files = [
+    ('photo', open('/path/to/image1.jpg', 'rb')),
+    ('photo', open('/path/to/image2.png', 'rb')),
+]
+
+# Without signal_type param - computes all enabled signal types
+response = requests.post('http://localhost:5100/h/hash/batch', files=files)
+results = response.json()
+
+# With signal_type param - computes only that signal type
+response = requests.post(
+    'http://localhost:5100/h/hash/batch',
+    files=files,
+    params={'signal_type': 'clip'}
+)
+results = response.json()
+
+# Process results: results is a list, one dict per file
+# Results are returned in the same order as files were uploaded
+# Each dict maps signal type names to hash values
+for i, file_result in enumerate(results):
+    print(f"File {i+1}:")
+    for signal_type, hash_value in file_result.items():
+        print(f"  {signal_type}: {hash_value}")
+```
+
+**Note**: 
+- Results are returned in the same sequential order as files were uploaded (first file = first result, second file = second result, etc.)
+- The endpoint automatically detects if signal types support batch processing (e.g., CLIP with `hash_from_file_list`). For batch-capable signal types, all files are processed together for optimal GPU utilization. Other signal types are processed individually per file.
+
 ### Hashing and matching
 
 **Warning**: This endpoint may be slow. Large timeout values or long-polling are recommended.

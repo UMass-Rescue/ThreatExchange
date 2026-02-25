@@ -172,7 +172,7 @@ def lookup_threshold():
      * Signal value (the hash)
      * Threshold (int) - maximum distance for matches (required)
     Output:
-     * List of matching with content_id, distance, and signal values
+     * List of matching with content_id and distance values
     """
 
     if request.method == "POST":
@@ -197,15 +197,10 @@ def lookup_threshold():
         abort(400, "threshold must be a number (int or float)")
 
     results = query_index_threshold(signal, signal_type_name, threshold)
-    storage = get_storage()
-    # Get signals for the results
-    content_ids = [m.metadata for m in results]
-    signals_by_content = storage.bank_content_get_signals(content_ids)
     matches = [
         {
             "bank_content_id": m.metadata,
             "distance": m.similarity_info.pretty_str(),
-            "signal": signals_by_content.get(m.metadata, {}).get(signal_type_name, ""),
         }
         for m in results
     ]
@@ -224,7 +219,7 @@ def lookup_topk():
      * Signal value (the hash)
      * k (int) - number of top matches to return (required)
     Output:
-     * List of matching with content_id, distance, and signal values
+     * List of matching with content_id and distance values
     """
     if request.method == "POST":
         if request.is_json:
@@ -244,15 +239,10 @@ def lookup_topk():
         abort(400, "k must be an integer")
 
     results = query_index_topk(signal, signal_type_name, k)
-    storage = get_storage()
-    # Get signals for the results
-    content_ids = [m.metadata for m in results]
-    signals_by_content = storage.bank_content_get_signals(content_ids)
     matches = [
         {
             "bank_content_id": m.metadata,
             "distance": m.similarity_info.pretty_str(),
-            "signal": signals_by_content.get(m.metadata, {}).get(signal_type_name, ""),
         }
         for m in results
     ]
