@@ -343,6 +343,7 @@ def _perform_lookup_with_details(
                         "distance": match["distance"],
                         "signal_type": st_name,
                         "signal_value": signal,
+                        "collab_metadata": match.get("collab_metadata", {}),
                     }
                 )
 

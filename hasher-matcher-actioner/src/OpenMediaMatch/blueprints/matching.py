@@ -58,6 +58,7 @@ bp.register_error_handler(HTTPException, api_error_handler)
 class MatchWithDistancePayload(t.TypedDict):
     bank_content_id: int
     distance: str
+    collab_metadata: t.NotRequired[t.Mapping[str, t.Sequence[str]]]
 
 
 TMatchByBank = dict[str, list[MatchWithDistancePayload]]
@@ -227,10 +228,16 @@ def lookup_signal_with_distance(
     signal: str, signal_type_name: str, banks: t.Optional[t.Set[str]] = None
 ) -> list[MatchWithDistancePayload]:
     results = query_index(signal, signal_type_name)
+    storage = get_storage()
+    content_ids = [m.metadata for m in results]
+    contents = storage.bank_content_get(content_ids)
+    content_by_id = {c.id: c for c in contents}
+
     matches: list[MatchWithDistancePayload] = [
         {
             "bank_content_id": m.metadata,
             "distance": m.similarity_info.pretty_str(),
+            "collab_metadata": content_by_id[m.metadata].collab_metadata if m.metadata in content_by_id else {},
         }
         for m in results
     ]
@@ -435,6 +442,7 @@ def lookup(
         match: MatchWithDistancePayload = {
             "bank_content_id": content.id,
             "distance": matched_content.similarity_info.pretty_str(),
+            "collab_metadata": content.collab_metadata,
         }
         results.setdefault(content.bank.name, []).append(match)
     return results

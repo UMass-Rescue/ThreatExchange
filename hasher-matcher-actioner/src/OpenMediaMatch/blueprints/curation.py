@@ -327,18 +327,32 @@ def bank_add_content(path: BankPathParams):
             content_type_hint=request.args.get("content_type"),
             signal_type_names=request.args.get("types"),
         )
+        file_metadata = None
     # File uploaded via multipart/form-data?
     elif request.files:
-        hashes = hashing.hash_media_from_form_data()
+        hash_result = hashing.hash_media_from_form_data_with_metadata()
+        hashes = hash_result["hashes"]
+        file_metadata = hash_result["metadata"]
     else:
         abort(400, "Neither `url` nor multipart file upload was received")
-    return _bank_add_signals(bank, hashes, metadata)
+
+    # Merge file metadata into user-provided metadata
+    if file_metadata:
+        if metadata is None:
+            metadata = BankedContentMetadata()
+        if metadata.json_data is None:
+            metadata.json_data = {}
+        metadata.json_data.update(file_metadata)
+
+    return _bank_add_signals(bank, hashes, metadata, original_media_uri=url)
 
 
 def _bank_add_signals(
     bank: iface.BankConfig,
     signal_type_to_signal_str: dict[str, str],
     metadata: t.Optional[BankedContentMetadata],
+    *,
+    original_media_uri: t.Optional[str] = None,
 ) -> dict[str, t.Any]:
     if not signal_type_to_signal_str:
         abort(400, "No signals given")
@@ -377,7 +391,7 @@ def _bank_add_signals(
         id=0,
         disable_until_ts=iface.BankContentConfig.ENABLED,
         collab_metadata=collab_metadata,
-        original_media_uri=None,
+        original_media_uri=original_media_uri,
         bank=bank,
     )
 

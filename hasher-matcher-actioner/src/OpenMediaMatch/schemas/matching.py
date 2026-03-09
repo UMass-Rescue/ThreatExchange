@@ -8,6 +8,7 @@ class MatchWithDistance(BaseModel):
 
     bank_content_id: int = Field(..., description="ID of the matched content")
     distance: str = Field(..., description="Distance/similarity score")
+    collab_metadata: Optional[dict[str, list[str]]] = Field(None, description="Collaboration metadata including filename")
 
 
 class RawLookupRequest(BaseModel):

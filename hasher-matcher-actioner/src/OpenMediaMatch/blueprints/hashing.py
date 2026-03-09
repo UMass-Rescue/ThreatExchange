@@ -223,6 +223,20 @@ def hash_media_from_form_data() -> dict[str, str]:
     Output:
         * Mapping of signal types to hash values
     """
+    result = hash_media_from_form_data_with_metadata()
+    return result["hashes"]
+
+
+def hash_media_from_form_data_with_metadata() -> dict[str, t.Any]:
+    """
+    Hash the provided file and return both hash values and file metadata.
+
+    Input:
+        * files - the multipart/form-data to hash (only one file allowed)
+
+    Output:
+        * Dictionary containing 'hashes' and 'metadata' keys
+    """
     if not request.files:
         return abort(400, "Missing multipart/form-data file upload")
 
@@ -231,6 +245,7 @@ def hash_media_from_form_data() -> dict[str, str]:
         abort(400, "Only one file allowed per request")
 
     ret = {}
+    file_metadata = {}
 
     # Each file in a multipart/form-data body has a name as well as a filename:
     # Content-Disposition: form-data; name="field1"; filename="example.txt"
@@ -250,6 +265,13 @@ def hash_media_from_form_data() -> dict[str, str]:
                 file.filename,
                 file.mimetype,
             )
+
+            file_metadata = {
+                "filename": file.filename,
+                "mimetype": file.mimetype,
+                "content_type": field_name,
+            }
+
             bytes = file.stream.read()
             for st in signal_types.values():
                 if issubclass(st, BytesHasher):
@@ -267,7 +289,10 @@ def hash_media_from_form_data() -> dict[str, str]:
                             path = Path(tmp.name)
                             ret[st.get_name()] = st.hash_from_file(path)
 
-    return ret
+    return {
+        "hashes": ret,
+        "metadata": file_metadata,
+    }
 
 
 def _parse_request_content_type(

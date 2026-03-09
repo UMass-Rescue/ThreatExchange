@@ -186,6 +186,10 @@ class MatchForm {
       const badgeClass = bank && bank.matching_enabled_ratio < 1.0 ? 'bg-warning' : 'bg-success';
       const showBadge = bank && bank.matching_enabled_ratio < 1.0;
 
+      const filename = match.collab_metadata && match.collab_metadata.filename ?
+        match.collab_metadata.filename[0] : null;
+      const filenameDisplay = filename ? `<br><small class="text-muted">Filename: ${filename}</small>` : '';
+
       return `
           <li class="list-group-item d-flex justify-content-between align-items-start">
             <div class="ms-2 me-auto">
@@ -193,6 +197,7 @@ class MatchForm {
               <small class="text-muted">
                 Content ID: ${match.content_id} | Signal: ${match.signal_type}
               </small>
+              ${filenameDisplay}
             </div>
             <div class="d-flex flex-column align-items-end">
               <span class="badge ${badgeClass} rounded-pill mb-1" title="${showBadge ? `This bank is only partially enabled, and may not count as matching in production based on coinflip. Enable the bank at 100% to ensure it matches consistently.` : ''}">
