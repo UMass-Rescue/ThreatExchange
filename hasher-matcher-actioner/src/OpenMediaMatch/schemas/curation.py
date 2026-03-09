@@ -63,6 +63,9 @@ class BankContentResponse(BaseModel):
     original_media_uri: Optional[str] = Field(None, description="Original media URI")
     bank: BankConfig = Field(..., description="Bank configuration")
     signals: Optional[dict[str, str]] = Field(None, description="Signal hashes")
+    metadata: Optional[BankedContentMetadata] = Field(
+        None, description="User-supplied metadata (content_id, content_uri, json)"
+    )
 
 
 class BankContentUpdateRequest(BaseModel):

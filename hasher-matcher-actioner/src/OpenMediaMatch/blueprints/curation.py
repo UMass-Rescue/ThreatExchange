@@ -206,6 +206,7 @@ def bank_get_content(path: BankContentPathParams):
     if not bank:
         abort(404, f"bank '{bank_name}' not found")
     include_signals = request.args.get("include_signals", "false").lower() == "true"
+    include_metadata = request.args.get("include_metadata", "true").lower() == "true"
     content = storage.bank_content_get([content_id])
     if not content:
         abort(404, f"content '{content_id}' not found")
@@ -224,6 +225,31 @@ def bank_get_content(path: BankContentPathParams):
         if content_id in signals:
             signals_payload = dict(signals[content_id])
 
+    # Reconstruct user metadata from collab_metadata for response
+    metadata_payload: t.Optional[BankedContentMetadata] = None
+    if include_metadata:
+        content_id_val = (
+            content_config.collab_metadata["content_id"][0]
+            if "content_id" in content_config.collab_metadata
+            else None
+        )
+        content_uri_val = (
+            content_config.collab_metadata["content_uri"][0]
+            if "content_uri" in content_config.collab_metadata
+            else content_config.original_media_uri
+        )
+        json_data = {
+            k: (v[0] if len(v) == 1 else v)
+            for k, v in content_config.collab_metadata.items()
+            if k not in ("content_id", "content_uri")
+        }
+        if content_id_val is not None or content_uri_val is not None or json_data:
+            metadata_payload = BankedContentMetadata(
+                content_id=content_id_val,
+                content_uri=content_uri_val,
+                json_data=json_data or None,
+            )
+
     response = BankContentResponse(
         id=content_config.id,
         disable_until_ts=content_config.disable_until_ts,
@@ -231,11 +257,14 @@ def bank_get_content(path: BankContentPathParams):
         original_media_uri=content_config.original_media_uri,
         bank=bank_schema,
         signals=signals_payload,
+        metadata=metadata_payload,
     )
 
     content_response = response.model_dump()
     if signals_payload is None:
         content_response.pop("signals", None)
+    if metadata_payload is None:
+        content_response.pop("metadata", None)
 
     return jsonify(content_response)
 
@@ -327,10 +356,27 @@ def _bank_add_signals(
         except Exception as e:
             abort(400, f"Invalid {name} signal: {str(e)}")
 
+    # Convert metadata to collab_metadata format (string sequences)
+    # Store content_id, content_uri, and json so they can be returned on GET
+    collab_metadata: dict[str, list[str]] = {}
+    if metadata:
+        if metadata.content_id is not None:
+            collab_metadata["content_id"] = [metadata.content_id]
+        if metadata.content_uri is not None:
+            collab_metadata["content_uri"] = [metadata.content_uri]
+        if metadata.json_data:
+            for key, value in metadata.json_data.items():
+                if isinstance(value, str):
+                    collab_metadata[key] = [value]
+                elif isinstance(value, (list, tuple)):
+                    collab_metadata[key] = [str(v) for v in value]
+                else:
+                    collab_metadata[key] = [str(value)]
+
     content_config = iface.BankContentConfig(
         id=0,
         disable_until_ts=iface.BankContentConfig.ENABLED,
-        collab_metadata={},
+        collab_metadata=collab_metadata,
         original_media_uri=None,
         bank=bank,
     )
